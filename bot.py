@@ -31,43 +31,108 @@ db = {
 }
 
 commands = {
-    "compass": "Espresso compass",
+    # "compass": "Espresso compass",
     "dial": "Dialling in basics",
-    "grindtime": "Entry level grinders",
-    "phamboy": "Mid-range grinders",
-    "machinery": "Entry level machines",
+    # "grindtime": "Entry level grinders",
+    # "phamboy": "Mid-range grinders",
+    # "machinery": "Entry level machines",
     "wdt": "WDT guide",
-    "marker": "Alignment marker test",
-    "profiles": "Coffee profiling",
-    "acc": "Accessory Guide",
+    # "marker": "Alignment marker test",
+    # "profiles": "Coffee profiling",
+    # "acc": "Accessory Guide",
 }
 
 
-@slash.slash(
-    name="espresso",
-    description="help with espresso",
+def add_topic(topic: str, description: str, content: str):
+    slash.subcommand(
+        base="espresso",
+        name=topic,
+        description=description,
+        options=[
+            manage_commands.create_option(
+                name="public",
+                description="make the response to be visible for everyone in the channel",
+                option_type=5,
+                required=False,
+            ),
+        ],
+        guild_ids=GUILD_IDS,
+    )(topic_handler(content))
+
+
+def topic_handler(content: str):
+    async def _handler(ctx, public: bool = False):
+        await ctx.send(content=content, hidden=not public)
+
+    return _handler
+
+
+for (name, description) in commands.items():
+    add_topic(name, description, db[name])
+
+# @slash.slash(
+#     name="espresso",
+#     description="help with espresso",
+#     options=[
+#         manage_commands.create_option(
+#             name="topic",
+#             description="help topic",
+#             option_type=3,
+#             required=True,
+#             choices=[{"name": v, "value": k} for (k, v) in commands.items()],
+#         ),
+#         manage_commands.create_option(
+#             name="public",
+#             description="make the response to be visible for everyone in the channel",
+#             option_type=5,
+#             required=False,
+#         ),
+#     ],
+#     guild_ids=GUILD_IDS,
+# )
+# async def _espresso(ctx, topic: str, public: bool = False):
+#     if topic in db:
+#         await ctx.send(content=db[topic], hidden=not public)
+#     else:
+#         await ctx.send(content=f"We don't have anything for {topic}", hidden=not public)
+
+
+@slash.subcommand(
+    base="espresso-topics",
+    name="add",
+    description="add new topic",
     options=[
         manage_commands.create_option(
             name="topic",
-            description="help topic",
+            description="topic used with /espresso",
             option_type=3,
             required=True,
-            choices=[{"name": v, "value": k} for (k, v) in commands.items()],
         ),
         manage_commands.create_option(
-            name="public",
-            description="make the response to be visible for everyone in the channel",
-            option_type=5,
-            required=False,
+            name="description",
+            description="description which will appear in the UI",
+            option_type=3,
+            required=True,
+        ),
+        manage_commands.create_option(
+            name="content",
+            description="a message sent to the user",
+            option_type=3,
+            required=True,
         ),
     ],
-    guild_ids=GUILD_IDS,
 )
-async def _help(ctx, topic: str, public: bool = False):
+async def _espresso_add(ctx, topic: str, description: str, content: str):
     if topic in db:
-        await ctx.send(content=db[topic], hidden=not public)
+        await ctx.send(
+            content=f"The topic is already in the database. Please use `/espresso edit` to modify it.",
+            hidden=True,
+        )
     else:
-        await ctx.send(content=f"We don't have anything for {topic}", hidden=not public)
+        db[topic] = content
+        commands[topic] = description
+        add_topic(topic, description, content)
+        await ctx.send(content=f"Topic **{topic}** was added.", hidden=True)
 
 
 client.run(TOKEN)
