@@ -7,17 +7,29 @@ from discord_slash import SlashContext
 from discord_slash.utils import (
     manage_commands,
 )
+from discord_slash.error import (
+    RequestFailure,
+)
+import json
 
 from dotenv import load_dotenv
+from db import db
+
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("discord_slash").setLevel(logging.DEBUG)
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_IDS = [int(v) for v in os.getenv("DISCORD_GUILD_IDS").split(",")]
 
+MAX_SUBCOMMANDS_ERROR_CODE = 50035
+
 intents = discord.Intents()
 intents.messages = True
 client = discord.Client(intents=intents)
-slash = SlashCommand(client, auto_register=True)
+slash = SlashCommand(client, auto_register=True, auto_delete=True)
 
 
 @client.event
@@ -25,33 +37,16 @@ async def on_ready():
     print(" ".join([f"{guild.name}: id: {guild.id}" for guild in client.guilds]))
 
 
-db = {
-    "wdt": "WDT is a technique to evently distribute coffe grounds and break clamps. More information: https://youtu.be/B3SsJhjP-Vo",
-    "dial": "https://espressoaf.com/guides/beginner.html",
-}
-
-commands = {
-    # "compass": "Espresso compass",
-    "dial": "Dialling in basics",
-    # "grindtime": "Entry level grinders",
-    # "phamboy": "Mid-range grinders",
-    # "machinery": "Entry level machines",
-    "wdt": "WDT guide",
-    # "marker": "Alignment marker test",
-    # "profiles": "Coffee profiling",
-    # "acc": "Accessory Guide",
-}
-
-
-def add_topic(topic: str, description: str, content: str):
+def add_topic(topic: str, group: str, description: str, content: str):
     slash.subcommand(
-        base="espresso",
+        base="wiki",
         name=topic,
         description=description,
+        subcommand_group=group,
         options=[
             manage_commands.create_option(
                 name="public",
-                description="make the response to be visible for everyone in the channel",
+                description="make the response be visible for everyone else in the channel",
                 option_type=5,
                 required=False,
             ),
@@ -67,44 +62,25 @@ def topic_handler(content: str):
     return _handler
 
 
-for (name, description) in commands.items():
-    add_topic(name, description, db[name])
-
-# @slash.slash(
-#     name="espresso",
-#     description="help with espresso",
-#     options=[
-#         manage_commands.create_option(
-#             name="topic",
-#             description="help topic",
-#             option_type=3,
-#             required=True,
-#             choices=[{"name": v, "value": k} for (k, v) in commands.items()],
-#         ),
-#         manage_commands.create_option(
-#             name="public",
-#             description="make the response to be visible for everyone in the channel",
-#             option_type=5,
-#             required=False,
-#         ),
-#     ],
-#     guild_ids=GUILD_IDS,
-# )
-# async def _espresso(ctx, topic: str, public: bool = False):
-#     if topic in db:
-#         await ctx.send(content=db[topic], hidden=not public)
-#     else:
-#         await ctx.send(content=f"We don't have anything for {topic}", hidden=not public)
+for (_, topic) in db.items():
+    add_topic(topic.key, topic.group, topic.description, topic.content)
 
 
 @slash.subcommand(
-    base="espresso-topics",
-    name="add",
-    description="add new topic",
+    base="wikimgmt",
+    name="upsert",
+    description="add or modify a topic",
+    guild_ids=GUILD_IDS,
     options=[
         manage_commands.create_option(
+            name="group",
+            description="group used with /wiki <group>",
+            option_type=3,
+            required=True,
+        ),
+        manage_commands.create_option(
             name="topic",
-            description="topic used with /espresso",
+            description="topic used with /wiki <group> <topic>",
             option_type=3,
             required=True,
         ),
@@ -122,17 +98,67 @@ for (name, description) in commands.items():
         ),
     ],
 )
-async def _espresso_add(ctx, topic: str, description: str, content: str):
+async def _topic_upsert(ctx, group: str, topic: str, description: str, content: str):
+    adding = True
     if topic in db:
+        del slash.subcommands["wiki"][db[topic].group][topic]
+        del db[topic]
+        await slash.delete_unused_commands()
+        adding = False
+
+    db[topic] = Topic(topic, group, description, content)
+    add_topic(topic, group, description, content)
+
+    action = "added" if adding else "modified"
+    try:
+        await slash.register_all_commands()
+    except RequestFailure as e:
+        error = json.loads(e.msg)
+        if error["code"] == MAX_SUBCOMMANDS_ERROR_CODE:
+            await ctx.send(
+                content=f"Failed to upsert topic **{topic}**.\n"
+                + f"You have reached maximum number of topics for the **{group}** group. Please add this topic to another group.\n"
+                + f"See bot logs for more details.",
+                hidden=True,
+            )
+        else:
+            await ctx.send(
+                content=f"Failed to upsert topic **{topic}**. See bot logs.",
+                hidden=True,
+            )
+        return
+
+    await ctx.send(content=f"Topic **{topic}** was {action}.", hidden=True)
+
+
+@slash.subcommand(
+    base="wikimgmt",
+    name="delete",
+    description="delete topic",
+    guild_ids=GUILD_IDS,
+    options=[
+        manage_commands.create_option(
+            name="topic",
+            description="topic used with /wiki",
+            option_type=3,
+            required=True,
+        ),
+    ],
+)
+async def _topic_delete(ctx, topic: str):
+    if topic not in db:
         await ctx.send(
-            content=f"The topic is already in the database. Please use `/espresso edit` to modify it.",
+            content=f"Topic **{topic}** is not in the database.",
             hidden=True,
         )
-    else:
-        db[topic] = content
-        commands[topic] = description
-        add_topic(topic, description, content)
-        await ctx.send(content=f"Topic **{topic}** was added.", hidden=True)
+        return
+
+    del slash.subcommands["wiki"][db[topic].group][topic]
+    del db[topic]
+
+    await slash.register_all_commands()
+
+    await ctx.send(content=f"Topic **{topic}** was deleted.", hidden=True)
 
 
 client.run(TOKEN)
