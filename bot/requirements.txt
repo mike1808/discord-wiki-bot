@@ -1,3 +1,5 @@
 discord-py-slash-command==1.0.8.5
 discord.py==1.6.0
 python-dotenv==0.15.0
+pony==0.7.14
+psycopg2-binary==2.8.6

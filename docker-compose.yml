@@ -1,0 +1,30 @@
+version: '3'
+
+services:
+  bot:
+    restart: always
+    build: ./bot
+    links:
+      - postgres
+    env_file:
+      - .env
+    command: python bot.py
+
+  data:
+    image: postgres:latest
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    command: "true"
+
+  postgres:
+    restart: always
+    image: postgres:latest
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+
+volumes:
+  db-data:
