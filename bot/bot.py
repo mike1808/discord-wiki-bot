@@ -33,7 +33,9 @@ intents = discord.Intents()
 intents.messages = True
 intents.guilds = True
 
-bot = HelpBot("!", intents=intents)
+bot = HelpBot(
+    "/", intents=intents, allowed_mentions=discord.AllowedMentions(everyone=False)
+)
 client = discord.Client()
 client.event
 bot.load_extension("slash")

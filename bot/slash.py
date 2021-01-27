@@ -58,11 +58,6 @@ class Slash(commands.Cog):
     def cog_unload(self):
         self.bot.slash.remove_cog_commands(self)
 
-    @cog_ext.cog_slash(name="test")
-    async def _test(self, ctx: SlashContext):
-        embed = discord.Embed(title="embed test")
-        await ctx.send(content="test", embeds=[embed])
-
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
         name="upsert",
@@ -217,6 +212,12 @@ def add_wiki_command(guild: int, group: str, key: str, desc: str, content: str):
             subcommand_group=group,
             options=[
                 manage_commands.create_option(
+                    name="reply_to",
+                    description="reply to the last message of specified user",
+                    option_type=6,
+                    required=False,
+                ),
+                manage_commands.create_option(
                     name="public",
                     description="make the response be visible for everyone else in the channel",
                     option_type=5,
@@ -233,7 +234,30 @@ def delete_wiki_command(guild: int, group: str, key: str):
 
 
 def topic_handler(content: str):
-    async def _handler(self: Slash, ctx: SlashContext, public: bool = False):
+    async def _handler(
+        self: Slash,
+        ctx: SlashContext,
+        reply_to: discord.Member = None,
+        public: bool = False,
+    ):
+        if reply_to:
+            try:
+                async for msg in ctx.channel.history(limit=10):
+                    if msg.author == reply_to:
+                        pass
+                        return await msg.reply(content)
+            except (
+                discord.Forbidden,
+                discord.HTTPException,
+                discord.NotFound,
+                TypeError,
+                ValueError,
+            ):
+                await ctx.send(
+                    content="Couldn't find message to reply. Normally sending content.",
+                    hidden=True,
+                )
+
         await ctx.send(content=content, complete_hidden=not public)
 
     return _handler
