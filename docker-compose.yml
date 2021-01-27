@@ -4,6 +4,7 @@ services:
   bot:
     restart: always
     build: ./bot
+    image: mike1808/discord-wiki-bot
     links:
       - postgres
       - redis
