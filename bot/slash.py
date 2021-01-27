@@ -128,7 +128,9 @@ class Slash(commands.Cog):
         action = "added" if adding else "modified"
         try:
             await self.reload_commands()
-            await ctx.send(content=f"**{group}/{key}** was {action}.")
+            await ctx.send(
+                content=f"**{group}/{key}** was {action}.", complete_hidden=True
+            )
         except discord_slash.error.RequestFailure as e:
             error = json.loads(e.msg)
             if error["code"] == MAX_SUBCOMMANDS_ERROR_CODE:
@@ -136,10 +138,12 @@ class Slash(commands.Cog):
                     content=f"Failed to upsert topic **{group}/{key}**.\n"
                     + f"You have reached maximum number of topics for the **{group}** group. Please add this topic to another group.\n"
                     + f"See bot logs for more details.",
+                    complete_hidden=True,
                 )
             else:
                 await ctx.send(
                     content=f"Failed to upsert topic **{group}/{key}**. See bot logs.",
+                    complete_hidden=True,
                 )
             failed = True
 
@@ -175,6 +179,7 @@ class Slash(commands.Cog):
         if topic is None:
             await ctx.send(
                 content=f"**{group}/{key}** is not in the database.",
+                complete_hidden=True,
             )
             return
 
@@ -279,7 +284,7 @@ def topic_handler(command_name: str, content: str):
             ):
                 await ctx.send(
                     content="Couldn't find message to reply. Normally sending content.",
-                    hidden=True,
+                    complete_hidden=True,
                 )
 
         await ctx.send(content=content, complete_hidden=not public)
