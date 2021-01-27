@@ -6,14 +6,39 @@ from config import config
 from db import Guild, Topic
 from discord.ext import commands
 from discord_slash import SlashCommand, SlashContext, cog_ext
-from discord_slash.error import RequestFailure
+import discord_slash.error
 from discord_slash.utils import manage_commands
 from pony.orm import db_session, select, commit
+import functools
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
 
 WIKI_COMMAND = "wiki"
 WIKI_MANAGEMENT_COMMAND = "wiki-mgmt"
+
+MANAGE_CHANNELS = discord.Permissions()
+MANAGE_CHANNELS.manage_channels = True
+
+
+def allow_only(permissions: discord.Permissions):
+    def decorate(func):
+        @functools.wraps(func)
+        async def wrapper(self, ctx: SlashContext, *args, **kwargs):
+            user: discord.Member = (
+                ctx.author
+                if not isinstance(ctx.author, int)
+                else await ctx.guild.fetch_member(ctx.author)
+            )
+            if user.guild_permissions >= permissions:
+                return await func(self, ctx, *args, **kwargs)
+            else:
+                return await ctx.send(
+                    content="You are not allowed to manage Wiki topics!", hidden=True
+                )
+
+        return wrapper
+
+    return decorate
 
 
 class Slash(commands.Cog):
@@ -70,6 +95,7 @@ class Slash(commands.Cog):
             ),
         ],
     )
+    @allow_only(MANAGE_CHANNELS)
     @db_session
     async def _topic_upsert(
         self, ctx: SlashContext, group: str, key: str, description: str, content: str
@@ -104,23 +130,20 @@ class Slash(commands.Cog):
         action = "added" if adding else "modified"
         try:
             await self.reload_commands()
-        except RequestFailure as e:
+            await ctx.send(content=f"**{group}/{key}** was {action}.")
+        except discord_slash.error.RequestFailure as e:
             error = json.loads(e.msg)
             if error["code"] == MAX_SUBCOMMANDS_ERROR_CODE:
                 await ctx.send(
                     content=f"Failed to upsert topic **{group}/{key}**.\n"
                     + f"You have reached maximum number of topics for the **{group}** group. Please add this topic to another group.\n"
                     + f"See bot logs for more details.",
-                    hidden=True,
                 )
             else:
                 await ctx.send(
                     content=f"Failed to upsert topic **{group}/{key}**. See bot logs.",
-                    hidden=True,
                 )
-            raise e
-
-        await ctx.send(content=f"**{group}/{key}** was {action}.", hidden=True)
+            failed = True
 
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
@@ -150,12 +173,9 @@ class Slash(commands.Cog):
             and t.key == key
         ).first()
 
-        print("topic is", topic)
-
         if topic is None:
             await ctx.send(
                 content=f"**{group}/{key}** is not in the database.",
-                hidden=True,
             )
             return
 
@@ -166,7 +186,7 @@ class Slash(commands.Cog):
         commit()
 
         await self.reload_commands()
-        await ctx.send(content=f"**{group}/{key}** was deleted.", hidden=True)
+        await ctx.send(content=f"**{group}/{key}** was deleted.", complete_hidden=True)
 
 
 @db_session
@@ -214,7 +234,7 @@ def delete_wiki_command(guild: int, group: str, key: str):
 
 def topic_handler(content: str):
     async def _handler(self: Slash, ctx: SlashContext, public: bool = False):
-        await ctx.send(content=content, hidden=not public)
+        await ctx.send(content=content, complete_hidden=not public)
 
     return _handler
 

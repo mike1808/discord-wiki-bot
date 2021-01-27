@@ -22,6 +22,10 @@ class HelpBot(commands.Bot):
     async def on_ready(self):
         print(" ".join([f"{guild.name}: id: {guild.id}" for guild in self.guilds]))
 
+    async def on_guild_join(self, guild: discord.Guild):
+        # TODO: make a DB entry
+        print("We have been added to a new guild!")
+
 
 setup()
 
@@ -30,6 +34,8 @@ intents.messages = True
 intents.guilds = True
 
 bot = HelpBot("!", intents=intents)
+client = discord.Client()
+client.event
 bot.load_extension("slash")
 
 if __name__ == "__main__":
