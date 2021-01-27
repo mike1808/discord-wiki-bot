@@ -13,7 +13,7 @@ class Analytics:
     def view(self, command_name):
         self._r.hincrby(VIEW_FIELD, command_name, 1)
 
-    def retreive(self, top):
+    def retreive(self):
         resp = self._r.hgetall(VIEW_FIELD)
         views = [(k.decode("utf-8"), int(v.decode("utf-8"))) for (k, v) in resp.items()]
         return sorted(views, key=lambda r: r[1], reverse=True)

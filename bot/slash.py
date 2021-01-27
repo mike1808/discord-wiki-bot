@@ -65,7 +65,7 @@ class Slash(commands.Cog):
         base=WIKI_MANAGEMENT_COMMAND,
         name="upsert",
         description="add or modify a topic",
-        guild_ids=config.guild_ids,
+        # guild_ids=config.guild_ids,
         options=[
             manage_commands.create_option(
                 name="group",
@@ -147,7 +147,7 @@ class Slash(commands.Cog):
         base=WIKI_MANAGEMENT_COMMAND,
         name="delete",
         description="delete topic",
-        guild_ids=config.guild_ids,
+        # guild_ids=config.guild_ids,
         options=[
             manage_commands.create_option(
                 name="group",
@@ -163,6 +163,7 @@ class Slash(commands.Cog):
             ),
         ],
     )
+    @allow_only(MANAGE_CHANNELS)
     @db_session
     async def _topic_delete(self, ctx: SlashContext, group: str, key: str):
         topic = Topic.select(
@@ -192,9 +193,10 @@ class Slash(commands.Cog):
         description="get commands usage analytics",
         guild_ids=config.guild_ids,
     )
+    @allow_only(MANAGE_CHANNELS)
     @db_session
     async def _analytics(self, ctx: SlashContext):
-        views = self.analytics.retreive(top=10)
+        views = self.analytics.retreive()
 
         embed = discord.Embed(
             title="Wiki Analytics", color=discord.Color.from_rgb(225, 225, 225)
