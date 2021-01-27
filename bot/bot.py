@@ -17,6 +17,9 @@ def setup():
 
     db.setup()
 
+    if config.db.populate:
+        db.populate_database()
+
 
 class HelpBot(commands.Bot):
     async def on_ready(self):

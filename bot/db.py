@@ -31,6 +31,7 @@ def setup():
     db.generate_mapping(create_tables=True)
 
 
+@db_session
 def populate_database():
     guild = Guild(
         id=str(config.dev_guild_id),

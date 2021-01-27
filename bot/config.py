@@ -4,7 +4,7 @@ import os
 
 load_dotenv()
 
-DB = namedtuple("DB", ["user", "password", "host", "database"])
+DB = namedtuple("DB", ["user", "password", "host", "database", "populate"])
 Redis = namedtuple("Redis", ["host"])
 Config = namedtuple(
     "Config", ["db", "redis", "discord_token", "dev_guild_id", "guild_ids"]
@@ -16,6 +16,7 @@ config = Config(
         password=os.getenv("POSTGRES_PASSWORD"),
         host=os.getenv("POSTGRES_HOST"),
         database=os.getenv("POSTGRES_DB"),
+        populate=os.getenv("POSTGRES_POPULATE") == "1",
     ),
     redis=Redis(
         host=os.getenv("REDIS_HOST"),
