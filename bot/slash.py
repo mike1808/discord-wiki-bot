@@ -4,11 +4,13 @@ import db
 import discord
 from config import config
 from db import Guild, Topic
-from discord.ext import commands
+import discord.ext.commands
 from discord_slash import SlashCommand, SlashContext, cog_ext
 import discord_slash.error
 from discord_slash.utils import manage_commands
+from discord.ext import commands
 from pony.orm import db_session, select, commit
+from analytics import Analytics
 import functools
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
@@ -42,7 +44,7 @@ def allow_only(permissions: discord.Permissions):
 
 
 class Slash(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: discord.ext.commands.Bot):
         if not hasattr(bot, "slash"):
             # Creates new SlashCommand instance to bot if bot doesn't have.
             bot.slash = SlashCommand(
@@ -50,6 +52,7 @@ class Slash(commands.Cog):
             )
         self.bot = bot
         self.bot.slash.get_cog_commands(self)
+        self.analytics = Analytics()
 
     async def reload_commands(self):
         self.bot.slash.get_cog_commands(self)
@@ -183,6 +186,25 @@ class Slash(commands.Cog):
         await self.reload_commands()
         await ctx.send(content=f"**{group}/{key}** was deleted.", complete_hidden=True)
 
+    @cog_ext.cog_subcommand(
+        base=WIKI_MANAGEMENT_COMMAND,
+        name="analytics",
+        description="get commands usage analytics",
+        guild_ids=config.guild_ids,
+    )
+    @db_session
+    async def _analytics(self, ctx: SlashContext):
+        views = self.analytics.retreive(top=10)
+
+        embed = discord.Embed(
+            title="Wiki Analytics", color=discord.Color.from_rgb(225, 225, 225)
+        )
+        embed.set_footer(text=self.bot.user, icon_url=self.bot.user.avatar_url)
+        for (command, view_count) in views:
+            embed.add_field(name=command, value=str(view_count), inline=False)
+
+        await ctx.send(embeds=[embed])
+
 
 @db_session
 def setup_wiki_commands():
@@ -225,7 +247,7 @@ def add_wiki_command(guild: int, group: str, key: str, desc: str, content: str):
                 ),
             ],
             guild_ids=[guild],
-        )(topic_handler(content)),
+        )(topic_handler(f"{group}/{key}", content)),
     )
 
 
@@ -233,7 +255,7 @@ def delete_wiki_command(guild: int, group: str, key: str):
     setattr(Slash, f"__{guild}_{group}_{key}", None)
 
 
-def topic_handler(content: str):
+def topic_handler(command_name: str, content: str):
     async def _handler(
         self: Slash,
         ctx: SlashContext,
@@ -259,6 +281,8 @@ def topic_handler(content: str):
                 )
 
         await ctx.send(content=content, complete_hidden=not public)
+
+        self.analytics.view(command_name)
 
     return _handler
 

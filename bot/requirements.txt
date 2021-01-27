@@ -3,3 +3,4 @@ discord.py==1.6.0
 python-dotenv==0.15.0
 pony==0.7.14
 psycopg2-binary==2.8.6
+redis==3.5.3

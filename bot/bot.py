@@ -36,8 +36,6 @@ intents.guilds = True
 bot = HelpBot(
     "/", intents=intents, allowed_mentions=discord.AllowedMentions(everyone=False)
 )
-client = discord.Client()
-client.event
 bot.load_extension("slash")
 
 if __name__ == "__main__":
