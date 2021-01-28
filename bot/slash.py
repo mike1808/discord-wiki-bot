@@ -9,7 +9,7 @@ import discord
 import discord.ext.commands
 import discord_slash.error
 from discord.ext import commands
-from discord_slash import SlashCommand, SlashContext, cog_ext
+from discord_slash import SlashCommand, SlashCommandOptionType, SlashContext, cog_ext
 from discord_slash.utils import manage_commands
 from pony.orm import commit, db_session, select
 
@@ -17,6 +17,7 @@ from bot import db
 from bot.analytics import Analytics
 from bot.config import config
 from bot.db import Guild, Topic
+from bot.feedback import Feedback
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
 
@@ -66,6 +67,7 @@ class Slash(commands.Cog):
         self.bot.slash.get_cog_commands(self)
         self.analytics = Analytics()
         self.logger = logging.getLogger("wikibot.slash")
+        self.feedback = Feedback()
 
     async def reload_commands(self):
         self.bot.slash.get_cog_commands(self)
@@ -73,6 +75,7 @@ class Slash(commands.Cog):
 
     def cog_unload(self):
         self.bot.slash.remove_cog_commands(self)
+        self.feedback.close()
 
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
@@ -83,25 +86,25 @@ class Slash(commands.Cog):
             manage_commands.create_option(
                 name="group",
                 description=f"group used with /{WIKI_COMMAND} <group>",
-                option_type=3,
+                option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
             manage_commands.create_option(
                 name="key",
                 description=f"key used with /{WIKI_COMMAND} <group> <key>",
-                option_type=3,
+                option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
             manage_commands.create_option(
                 name="description",
                 description=f"description which will appear in the UI",
-                option_type=3,
+                option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
             manage_commands.create_option(
                 name="content",
                 description="a message sent to the user",
-                option_type=3,
+                option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
         ],
@@ -164,13 +167,13 @@ class Slash(commands.Cog):
             manage_commands.create_option(
                 name="group",
                 description=f"group used with /{WIKI_COMMAND} <group>",
-                option_type=3,
+                option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
             manage_commands.create_option(
                 name="key",
                 description=f"key used with /{WIKI_COMMAND} <group> <key>",
-                option_type=3,
+                option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
         ],
@@ -373,6 +376,41 @@ class Slash(commands.Cog):
             content=f"Import was successfuly finished! {added} added and {updated} updated.",
         )
 
+    @cog_ext.cog_subcommand(
+        base=WIKI_COMMAND,
+        name="feedback",
+        description=f"leave feedback to the bot developer",
+        options=[
+            manage_commands.create_option(
+                name="feedback",
+                description="feedback message",
+                option_type=SlashCommandOptionType.STRING,
+                required=True,
+            ),
+        ],
+        guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
+    )
+    @db_session
+    async def _feedback(self, ctx: SlashContext, feedback: str):
+        await ctx.respond(eat=True)
+
+        author: Discord.Member = await ctx.guild.fetch_member(ctx.author)
+
+        self.logger.info(
+            f"member: %d:%s gave feedback",
+            author.id,
+            author.name,
+        )
+
+        try:
+            self.feedback.send_feedback(
+                author.id, author.name, ctx.guild.id, ctx.guild.name, feedback
+            )
+        except Exception as e:
+            self.logger.critical("Failed to send feeback", e, exc_info=True)
+
+        await ctx.send("Thank you for your feedback!", hidden=True)
+
 
 @db_session
 def setup_wiki_commands():
@@ -404,13 +442,13 @@ def add_wiki_command(guild: int, group: str, key: str, desc: str, content: str):
                 manage_commands.create_option(
                     name="reply_to",
                     description="reply to the last message of specified user",
-                    option_type=6,
+                    option_type=SlashCommandOptionType.USER,
                     required=False,
                 ),
                 manage_commands.create_option(
                     name="public",
                     description="make the response be visible for everyone else in the channel",
-                    option_type=5,
+                    option_type=SlashCommandOptionType.BOOLEAN,
                     required=False,
                 ),
             ],

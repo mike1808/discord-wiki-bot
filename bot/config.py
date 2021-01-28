@@ -7,7 +7,8 @@ load_dotenv()
 
 DB = namedtuple("DB", ["user", "password", "host", "database", "populate"])
 Redis = namedtuple("Redis", ["host"])
-Config = namedtuple("Config", ["db", "redis", "discord_token", "dev_guild_id"])
+SMTP = namedtuple("SMTP", ["host", "email", "password", "from_email"])
+Config = namedtuple("Config", ["db", "redis", "discord_token", "dev_guild_id", "smtp"])
 
 config = Config(
     db=DB(
@@ -24,4 +25,10 @@ config = Config(
     dev_guild_id=int(os.getenv("DISCORD_DEV_GUILD_ID"))
     if os.getenv("DISCORD_DEV_GUILD_ID")
     else None,
+    smtp=SMTP(
+        host=os.getenv("WIKIBOT_SMTP_HOST"),
+        email=os.getenv("WIKIBOT_SMTP_EMAIL"),
+        from_email=os.getenv("WIKIBOT_SMTP_FROM_EMAIL"),
+        password=os.getenv("WIKIBOT_SMTP_PASSWORD"),
+    ),
 )
