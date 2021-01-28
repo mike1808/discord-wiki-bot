@@ -13,10 +13,10 @@ from discord_slash import SlashCommand, SlashContext, cog_ext
 from discord_slash.utils import manage_commands
 from pony.orm import commit, db_session, select
 
-from . import db
-from .analytics import Analytics
-from .config import config
-from .db import Guild, Topic
+from bot import db
+from bot.analytics import Analytics
+from bot.config import config
+from bot.db import Guild, Topic
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
 
@@ -78,7 +78,7 @@ class Slash(commands.Cog):
         base=WIKI_MANAGEMENT_COMMAND,
         name="upsert",
         description="add or modify a topic",
-        # guild_ids=config.guild_ids,
+        guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
         options=[
             manage_commands.create_option(
                 name="group",
@@ -159,7 +159,7 @@ class Slash(commands.Cog):
         base=WIKI_MANAGEMENT_COMMAND,
         name="delete",
         description="delete topic",
-        # guild_ids=config.guild_ids,
+        guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
         options=[
             manage_commands.create_option(
                 name="group",
@@ -215,7 +215,7 @@ class Slash(commands.Cog):
         base=WIKI_MANAGEMENT_COMMAND,
         name="analytics",
         description="get commands usage analytics",
-        guild_ids=config.guild_ids,
+        guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
     @allow_only(MANAGE_CHANNELS)
     @db_session
@@ -239,7 +239,7 @@ class Slash(commands.Cog):
         subcommand_group="bulk",
         name="help",
         description=f"show help with `/{WIKI_COMMAND} import` commands",
-        guild_ids=config.guild_ids,
+        guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
     @allow_only(MANAGE_CHANNELS)
     async def _bulk_help(self, ctx: SlashContext):
@@ -259,7 +259,7 @@ class Slash(commands.Cog):
         subcommand_group="bulk",
         name="export",
         description=f"export all existing topics to CSV file",
-        guild_ids=config.guild_ids,
+        guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
     @allow_only(MANAGE_CHANNELS)
     @db_session
@@ -295,7 +295,7 @@ class Slash(commands.Cog):
         subcommand_group="bulk",
         name="import",
         description=f"import topics from CSV file",
-        guild_ids=config.guild_ids,
+        guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
     @allow_only(MANAGE_CHANNELS)
     @db_session

@@ -1,4 +1,4 @@
-FROM python:3.9-slim-buster
+FROM python:3.9-buster
 
 WORKDIR /bot
 
@@ -9,4 +9,6 @@ RUN pip install -r requirements.txt
 # Bundle app source
 COPY . /bot
 
-CMD [ "python", "bot.py" ]
+WORKDIR /
+
+CMD [ "python", "-m", "bot.bot" ]

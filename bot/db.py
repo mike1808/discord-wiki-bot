@@ -3,7 +3,7 @@ import sys
 
 from pony.orm import *
 
-from .config import config
+from bot.config import config
 
 db = Database(
     provider="postgres",

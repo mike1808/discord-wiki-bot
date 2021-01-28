@@ -7,9 +7,9 @@ from discord_slash.error import RequestFailure
 from discord_slash.utils import manage_commands
 from pony.orm import db_session, select
 
-from . import db
-from .config import config
-from .db import Guild, Topic
+from bot import db
+from bot.config import config
+from bot.db import Guild, Topic
 
 logger = logging.getLogger("wikibot.bot")
 

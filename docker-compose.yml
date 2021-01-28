@@ -10,7 +10,7 @@ services:
       - redis
     env_file:
       - .env
-    command: python bot.py
+    command: python -m bot.bot
 
   data:
     image: postgres:latest

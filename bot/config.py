@@ -7,9 +7,7 @@ load_dotenv()
 
 DB = namedtuple("DB", ["user", "password", "host", "database", "populate"])
 Redis = namedtuple("Redis", ["host"])
-Config = namedtuple(
-    "Config", ["db", "redis", "discord_token", "dev_guild_id", "guild_ids"]
-)
+Config = namedtuple("Config", ["db", "redis", "discord_token", "dev_guild_id"])
 
 config = Config(
     db=DB(
@@ -23,6 +21,7 @@ config = Config(
         host=os.getenv("REDIS_HOST"),
     ),
     discord_token=os.getenv("DISCORD_TOKEN"),
-    dev_guild_id=int(os.getenv("DISCORD_DEV_GUILD_ID")),
-    guild_ids=[int(v) for v in os.getenv("DISCORD_GUILD_IDS").split(",")],
+    dev_guild_id=int(os.getenv("DISCORD_DEV_GUILD_ID"))
+    if os.getenv("DISCORD_DEV_GUILD_ID")
+    else None,
 )
