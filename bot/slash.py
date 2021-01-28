@@ -128,9 +128,7 @@ class Slash(commands.Cog):
         action = "added" if adding else "modified"
         try:
             await self.reload_commands()
-            await ctx.send(
-                content=f"**{group}/{key}** was {action}.", complete_hidden=True
-            )
+            await ctx.send(content=f"**{group}/{key}** was {action}.", hidden=True)
         except discord_slash.error.RequestFailure as e:
             error = json.loads(e.msg)
             if error["code"] == MAX_SUBCOMMANDS_ERROR_CODE:
@@ -138,12 +136,12 @@ class Slash(commands.Cog):
                     content=f"Failed to upsert topic **{group}/{key}**.\n"
                     + f"You have reached maximum number of topics for the **{group}** group. Please add this topic to another group.\n"
                     + f"See bot logs for more details.",
-                    complete_hidden=True,
+                    hidden=True,
                 )
             else:
                 await ctx.send(
                     content=f"Failed to upsert topic **{group}/{key}**. See bot logs.",
-                    complete_hidden=True,
+                    hidden=True,
                 )
             failed = True
 
@@ -179,7 +177,7 @@ class Slash(commands.Cog):
         if topic is None:
             await ctx.send(
                 content=f"**{group}/{key}** is not in the database.",
-                complete_hidden=True,
+                hidden=True,
             )
             return
 
@@ -190,7 +188,7 @@ class Slash(commands.Cog):
         commit()
 
         await self.reload_commands()
-        await ctx.send(content=f"**{group}/{key}** was deleted.", complete_hidden=True)
+        await ctx.send(content=f"**{group}/{key}** was deleted.", hidden=True)
 
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
