@@ -1,5 +1,9 @@
-from config import config
+import csv
+import sys
+
 from pony.orm import *
+
+from .config import config
 
 db = Database(
     provider="postgres",
@@ -23,7 +27,42 @@ class Topic(db.Entity):
     desc = Optional(str)
     content = Required(str)
 
-    composite_index(guild, group, key)
+    composite_key(guild, group, key)
+
+
+def upsert_topic(guild_id, group, key, desc, content):
+    topic = Topic.select(
+        lambda t: t.guild.id == guild_id and t.group == group and t.key == key
+    ).first()
+
+    if topic is None:
+        topic = Topic(
+            guild=guild_id,
+            group=group,
+            key=key,
+            desc=desc,
+            content=content,
+        )
+        new = True
+    else:
+        topic.desc = desc
+        topic.content = content
+        new = False
+
+    return (topic, new)
+
+
+def upsert_guild(guild_id, guild_name):
+    try:
+        guild = Guild[guild_id]
+    except ObjectNotFound:
+        guild = None
+
+    new = False
+    if guild is None:
+        guild = Guild(id=guild_id, name=guild_name)
+        new = True
+    return (guild, new)
 
 
 def setup():
@@ -107,3 +146,15 @@ def populate_database():
         topic.guild = guild
 
     commit()
+
+
+@db_session
+def export_to_csv():
+    topics_writer = csv.writer(sys.stderr, delimiter=",")
+    for topic in Topic.select(lambda t: t.guild.id == str(config.dev_guild_id)):
+        topics_writer.writerow([topic.group, topic.key, topic.desc, topic.content])
+
+
+if __name__ == "__main__":
+    setup()
+    export_to_csv()

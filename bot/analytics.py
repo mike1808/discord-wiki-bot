@@ -1,7 +1,6 @@
 import redis
 
-from config import config
-
+from .config import config
 
 VIEW_FIELD = "view"
 

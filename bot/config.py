@@ -1,6 +1,7 @@
-from dotenv import load_dotenv
-from collections import namedtuple
 import os
+from collections import namedtuple
+
+from dotenv import load_dotenv
 
 load_dotenv()
 
