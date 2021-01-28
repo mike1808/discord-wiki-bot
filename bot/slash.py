@@ -201,7 +201,9 @@ class Slash(commands.Cog):
     @allow_only(MANAGE_CHANNELS)
     @db_session
     async def _analytics(self, ctx: SlashContext):
-        views = self.analytics.retreive()
+        views = self.analytics.retreive(
+            ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild
+        )
 
         embed = discord.Embed(
             title="Wiki Analytics", color=discord.Color.from_rgb(225, 225, 225)
@@ -289,7 +291,9 @@ def topic_handler(command_name: str, content: str):
 
         await ctx.send(content=content, complete_hidden=not public)
 
-        self.analytics.view(command_name)
+        self.analytics.view(
+            ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild, command_name
+        )
 
     return _handler
 
