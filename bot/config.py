@@ -9,7 +9,9 @@ DB = namedtuple("DB", ["user", "password", "host", "database", "populate"])
 Redis = namedtuple("Redis", ["host"])
 SMTP = namedtuple("SMTP", ["host", "email", "password", "from_email"])
 Config = namedtuple(
-    "Config", ["db", "redis", "discord_token", "dev_guild_id", "smtp", "command_prefix"]
+    "Config",
+    ["db", "redis", "discord_token", "dev_guild_id", "smtp", "command_prefix"],
+    defaults=[None, None, "", None, None, ""],
 )
 
 config = Config(
@@ -24,14 +26,12 @@ config = Config(
         host=os.getenv("REDIS_HOST"),
     ),
     discord_token=os.getenv("DISCORD_TOKEN"),
-    dev_guild_id=int(os.getenv("DISCORD_DEV_GUILD_ID"))
-    if os.getenv("DISCORD_DEV_GUILD_ID")
-    else None,
+    dev_guild_id=int(os.getenv("DISCORD_DEV_GUILD_ID")) if os.getenv("DISCORD_DEV_GUILD_ID") else None,
     smtp=SMTP(
         host=os.getenv("WIKIBOT_SMTP_HOST"),
         email=os.getenv("WIKIBOT_SMTP_EMAIL"),
         from_email=os.getenv("WIKIBOT_SMTP_FROM_EMAIL"),
         password=os.getenv("WIKIBOT_SMTP_PASSWORD"),
     ),
-    command_prefix=os.getenv("WIKIBOT_COMMAND_PREFIX"),
+    command_prefix=os.getenv("WIKIBOT_COMMAND_PREFIX") or "",
 )

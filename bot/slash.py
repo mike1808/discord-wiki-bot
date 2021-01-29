@@ -67,57 +67,23 @@ class Slash(commands.Cog):
         self.logger = logging.getLogger("wikibot.slash")
         self.feedback = Feedback()
 
-    async def reload_commands(self):
+    def cog_unload(self):
+        self.slash.remove_cog_commands(self)
+        self.feedback.close()
+
+    async def _reload_commands(self):
         await self.slash.register_all_commands()
 
     @db_session
     async def _setup_wiki_commands(self):
         for topic in Topic.select():
-            self._add_wiki_command(
+            self.__add_wiki_command(
                 int(topic.guild.id),
                 topic.group,
                 topic.key,
                 topic.desc,
                 topic.content,
             )
-
-    def _add_wiki_command(self, guild: int, group: str, key: str, desc: str, content: str):
-        self.slash.subcommand(
-            base=WIKI_COMMAND,
-            name=key,
-            description=desc,
-            subcommand_group=group,
-            options=[
-                manage_commands.create_option(
-                    name="reply_to",
-                    description="reply to the last message of specified user",
-                    option_type=SlashCommandOptionType.USER,
-                    required=False,
-                ),
-                manage_commands.create_option(
-                    name="public",
-                    description="make the response be visible for everyone else in the channel",
-                    option_type=SlashCommandOptionType.BOOLEAN,
-                    required=False,
-                ),
-            ],
-            guild_ids=[guild],
-        )(self._topic_handler(f"{group}/{key}", content))
-
-    def _delete_wiki_command(self, guild_id: int, group: str, key: str):
-        command = None
-
-        if WIKI_COMMAND in self.slash.subcommands:
-            if group in self.slash.subcommands[WIKI_COMMAND]:
-                if key in self.slash.subcommands[WIKI_COMMAND][group]:
-                    if guild_id in self.slash.subcommands[WIKI_COMMAND][group][key].allowed_guild_ids:
-                        command = self.slash.subcommands[WIKI_COMMAND][group][key]
-
-        command.allowed_guild_ids = [g for g in command.allowed_guild_ids if g != guild_id]
-        if len(command.allowed_guild_ids) == 0:
-            del self.slash.subcommands[WIKI_COMMAND][group][key]
-
-        setattr(Slash, f"__{guild_id}_{group}_{key}", None)
 
     def _topic_handler(self, command_name: str, content: str):
         async def _handler(
@@ -151,10 +117,6 @@ class Slash(commands.Cog):
             )
 
         return _handler
-
-    def cog_unload(self):
-        self.slash.remove_cog_commands(self)
-        self.feedback.close()
 
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
@@ -208,11 +170,11 @@ class Slash(commands.Cog):
         # TODO: remove this and figure out how to make @db_session work with async
         commit()
 
-        self._add_wiki_command(ctx.guild.id, group, key, description, content)
+        self.__add_wiki_command(ctx.guild.id, group, key, description, content)
 
         action = "added" if new else "modified"
         try:
-            await self.reload_commands()
+            await self._reload_commands()
             await ctx.send(content=f"**{group}/{key}** was {action}.", hidden=True)
         except discord_slash.error.RequestFailure as e:
             error = json.loads(e.msg)
@@ -271,12 +233,12 @@ class Slash(commands.Cog):
             key,
             author_id,
         )
-        self._delete_wiki_command(ctx.guild.id, group, key)
+        self.__delete_wiki_command(ctx.guild.id, group, key)
         topic.delete()
         # TODO: remove this and figure out how to make @db_session work with async
         commit()
 
-        await self.reload_commands()
+        await self._reload_commands()
         await ctx.send(content=f"**{group}/{key}** was deleted.", hidden=True)
 
     @cog_ext.cog_subcommand(
@@ -307,7 +269,7 @@ class Slash(commands.Cog):
     )
     @allow_only(MANAGE_CHANNELS)
     async def _bulk_help(self, ctx: SlashContext):
-        await ctx.respond()
+        await ctx.respond(eat=True)
         await ctx.send(
             content='Bulk import and export commands consume and produce CSV files. CSV files should be delimited with a single quota `,` and use double quotes `"`.'
             + "\nIt should contain 4 columns and the header is optional. Those columns are `group,key,description,content.`."
@@ -416,11 +378,11 @@ class Slash(commands.Cog):
             else:
                 updated += 1
 
-            self._add_wiki_command(ctx.guild.id, topic.group, topic.key, topic.desc, topic.content)
+            self.__add_wiki_command(ctx.guild.id, topic.group, topic.key, topic.desc, topic.content)
 
         # TODO: remove this and figure out how to make @db_session work with async
         commit()
-        await self.reload_commands()
+        await self._reload_commands()
         await ctx.send(
             content=f"Import was successfuly finished! {added} added and {updated} updated.",
         )
@@ -457,6 +419,44 @@ class Slash(commands.Cog):
             self.logger.critical("Failed to send feeback", e, exc_info=True)
 
         await ctx.send("Thank you for your feedback!", hidden=True)
+
+    def __add_wiki_command(self, guild: int, group: str, key: str, desc: str, content: str):
+        self.slash.subcommand(
+            base=WIKI_COMMAND,
+            name=key,
+            description=desc,
+            subcommand_group=group,
+            options=[
+                manage_commands.create_option(
+                    name="reply_to",
+                    description="reply to the last message of specified user",
+                    option_type=SlashCommandOptionType.USER,
+                    required=False,
+                ),
+                manage_commands.create_option(
+                    name="public",
+                    description="make the response be visible for everyone else in the channel",
+                    option_type=SlashCommandOptionType.BOOLEAN,
+                    required=False,
+                ),
+            ],
+            guild_ids=[guild],
+        )(self._topic_handler(f"{group}/{key}", content))
+
+    def __delete_wiki_command(self, guild_id: int, group: str, key: str):
+        command = None
+
+        if WIKI_COMMAND in self.slash.subcommands:
+            if group in self.slash.subcommands[WIKI_COMMAND]:
+                if key in self.slash.subcommands[WIKI_COMMAND][group]:
+                    if guild_id in self.slash.subcommands[WIKI_COMMAND][group][key].allowed_guild_ids:
+                        command = self.slash.subcommands[WIKI_COMMAND][group][key]
+
+        command.allowed_guild_ids = [g for g in command.allowed_guild_ids if g != guild_id]
+        if len(command.allowed_guild_ids) == 0:
+            del self.slash.subcommands[WIKI_COMMAND][group][key]
+
+        setattr(Slash, f"__{guild_id}_{group}_{key}", None)
 
 
 @db_session
