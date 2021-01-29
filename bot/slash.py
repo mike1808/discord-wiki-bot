@@ -11,6 +11,7 @@ import discord_slash.error
 from discord.ext import commands
 from discord_slash import SlashCommand, SlashCommandOptionType, SlashContext, cog_ext
 from discord_slash.utils import manage_commands
+import discord_slash.model
 from pony.orm import commit, db_session, select
 
 from bot import db
@@ -121,30 +122,30 @@ class Slash(commands.Cog):
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
         name="upsert",
-        description="add or modify a topic",
+        description="Add or modify a topic",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
         options=[
             manage_commands.create_option(
                 name="group",
-                description=f"group used with /{WIKI_COMMAND} <group>",
+                description=f"Group used with /{WIKI_COMMAND} <group>",
                 option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
             manage_commands.create_option(
                 name="key",
-                description=f"key used with /{WIKI_COMMAND} <group> <key>",
+                description=f"Key used with /{WIKI_COMMAND} <group> <key>",
                 option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
             manage_commands.create_option(
                 name="description",
-                description=f"description which will appear in the UI",
+                description=f"Description which will appear in the UI",
                 option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
             manage_commands.create_option(
                 name="content",
-                description="a message sent to the user",
+                description="A message sent to the user",
                 option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
@@ -156,7 +157,7 @@ class Slash(commands.Cog):
         await ctx.respond()
         topic, new = db.upsert_topic(str(ctx.guild.id), group, key, description, content)
 
-        author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
+        author_id = ctx.author.id if not isinstance(ctx.author, int) else ctx.author
         self.logger.info(
             f"upserting new topic: %d /{WIKI_COMMAND} %s %s %s %s by member: %d",
             ctx.guild.id,
@@ -195,18 +196,18 @@ class Slash(commands.Cog):
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
         name="delete",
-        description="delete topic",
+        description="Delete topic",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
         options=[
             manage_commands.create_option(
                 name="group",
-                description=f"group used with /{WIKI_COMMAND} <group>",
+                description=f"Group used with /{WIKI_COMMAND} <group>",
                 option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
             manage_commands.create_option(
                 name="key",
-                description=f"key used with /{WIKI_COMMAND} <group> <key>",
+                description=f"Key used with /{WIKI_COMMAND} <group> <key>",
                 option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
@@ -225,7 +226,7 @@ class Slash(commands.Cog):
             )
             return
 
-        author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
+        author_id = ctx.author.id if not isinstance(ctx.author, int) else ctx.author
         self.logger.info(
             f"deleteing topic: %d /{WIKI_COMMAND} %s %s by member: %d",
             ctx.guild.id,
@@ -244,7 +245,7 @@ class Slash(commands.Cog):
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
         name="analytics",
-        description="get commands usage analytics",
+        description="Get commands usage analytics",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
     @allow_only(MANAGE_CHANNELS)
@@ -264,7 +265,7 @@ class Slash(commands.Cog):
         base=WIKI_MANAGEMENT_COMMAND,
         subcommand_group="bulk",
         name="help",
-        description=f"show help with `/{WIKI_COMMAND} import` commands",
+        description=f"Show help with `/{WIKI_MANAGEMENT_COMMAND} import` commands",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
     @allow_only(MANAGE_CHANNELS)
@@ -284,14 +285,14 @@ class Slash(commands.Cog):
         base=WIKI_MANAGEMENT_COMMAND,
         subcommand_group="bulk",
         name="export",
-        description=f"export all existing topics to CSV file",
+        description=f"Export all existing topics to CSV file",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
     @allow_only(MANAGE_CHANNELS)
     @db_session
     async def _bulk_export(self, ctx: SlashContext):
         await ctx.respond()
-        author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
+        author_id = ctx.author.id if not isinstance(ctx.author, int) else ctx.author
         self.logger.info(
             f"sending export by request of member: %d",
             author_id,
@@ -318,7 +319,7 @@ class Slash(commands.Cog):
         base=WIKI_MANAGEMENT_COMMAND,
         subcommand_group="bulk",
         name="import",
-        description=f"import topics from CSV file",
+        description=f"Import topics from CSV file",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
     @allow_only(MANAGE_CHANNELS)
@@ -390,11 +391,11 @@ class Slash(commands.Cog):
     @cog_ext.cog_subcommand(
         base=WIKI_COMMAND,
         name="feedback",
-        description=f"leave feedback to the bot developer",
+        description=f"Leave feedback to the bot developer",
         options=[
             manage_commands.create_option(
                 name="feedback",
-                description="feedback message",
+                description="Feedback message",
                 option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
@@ -405,12 +406,12 @@ class Slash(commands.Cog):
     async def _feedback(self, ctx: SlashContext, feedback: str):
         await ctx.respond(eat=True)
 
-        author: Discord.Member = await ctx.guild.fetch_member(ctx.author)
+        author: discord.Member = await ctx.guild.fetch_member(ctx.author)
 
         self.logger.info(
             f"member: %d:%s gave feedback",
             author.id,
-            author.name,
+            author.display_name,
         )
 
         try:
@@ -419,6 +420,42 @@ class Slash(commands.Cog):
             self.logger.critical("Failed to send feeback", e, exc_info=True)
 
         await ctx.send("Thank you for your feedback!", hidden=True)
+
+    @cog_ext.cog_subcommand(
+        base=WIKI_COMMAND,
+        name="help",
+        description=f"Get help about WikiBot commands",
+        guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
+    )
+    async def _help(self, ctx: SlashContext):
+        await ctx.respond(eat=True)
+
+        author: discord.Member = await ctx.guild.fetch_member(ctx.author)
+
+        embed = discord.Embed(title="Help", color=discord.Color.from_rgb(225, 225, 225))
+        embed.set_footer(text=self.bot.user, icon_url=self.bot.user.avatar_url)
+        embed.add_field(
+            name=":information_source: General",
+            value=f"`/{WIKI_COMMAND} <group> <key>`: Get wiki content of the specified topic"
+            + f"\n`/{WIKI_COMMAND} feedback`: {self.slash.subcommands[WIKI_COMMAND]['feedback'].description}",
+            inline=False,
+        )
+        if author.guild_permissions >= MANAGE_CHANNELS:
+            help = ""
+            for (name, x) in self.slash.subcommands[WIKI_MANAGEMENT_COMMAND].items():
+                if isinstance(x, discord_slash.model.CogSubcommandObject):
+                    help += f"`/{WIKI_MANAGEMENT_COMMAND} {name}`: {x.description}\n"
+                else:
+                    for (subname, x) in self.slash.subcommands[WIKI_MANAGEMENT_COMMAND][name].items():
+                        help += f"`/{WIKI_MANAGEMENT_COMMAND} {name} {subname}`: {x.description}\n"
+
+            embed.add_field(
+                name=":wrench: Settings",
+                value=help,
+                inline=False,
+            )
+
+        await author.send(embed=embed)
 
     def __add_wiki_command(self, guild: int, group: str, key: str, desc: str, content: str):
         self.slash.subcommand(
@@ -429,13 +466,13 @@ class Slash(commands.Cog):
             options=[
                 manage_commands.create_option(
                     name="reply_to",
-                    description="reply to the last message of specified user",
+                    description="Reply to the last message of specified user",
                     option_type=SlashCommandOptionType.USER,
                     required=False,
                 ),
                 manage_commands.create_option(
                     name="public",
-                    description="make the response be visible for everyone else in the channel",
+                    description="Make the response be visible for everyone else in the channel",
                     option_type=SlashCommandOptionType.BOOLEAN,
                     required=False,
                 ),
@@ -457,87 +494,6 @@ class Slash(commands.Cog):
             del self.slash.subcommands[WIKI_COMMAND][group][key]
 
         setattr(Slash, f"__{guild_id}_{group}_{key}", None)
-
-
-@db_session
-def setup_wiki_commands():
-    for topic in Topic.select():
-        add_wiki_command(
-            int(topic.guild.id),
-            topic.group,
-            topic.key,
-            topic.desc,
-            topic.content,
-        )
-
-
-# We need to dynamically add slash commands for every Wiki topic
-# but slash extension only allows that via class methods
-# so we need to assign a method decorated with cog_ext.cog_subcommand
-# under some unique name
-# TODO: super hack, rewrite
-def add_wiki_command(guild: int, group: str, key: str, desc: str, content: str):
-    setattr(
-        Slash,
-        f"__{guild}_{group}_{key}",
-        cog_ext.cog_subcommand(
-            base=WIKI_COMMAND,
-            name=key,
-            description=desc,
-            subcommand_group=group,
-            options=[
-                manage_commands.create_option(
-                    name="reply_to",
-                    description="reply to the last message of specified user",
-                    option_type=SlashCommandOptionType.USER,
-                    required=False,
-                ),
-                manage_commands.create_option(
-                    name="public",
-                    description="make the response be visible for everyone else in the channel",
-                    option_type=SlashCommandOptionType.BOOLEAN,
-                    required=False,
-                ),
-            ],
-            guild_ids=[guild],
-        )(topic_handler(f"{group}/{key}", content)),
-    )
-
-
-def delete_wiki_command(guild: int, group: str, key: str):
-    setattr(Slash, f"__{guild}_{group}_{key}", None)
-
-
-def topic_handler(command_name: str, content: str):
-    async def _handler(
-        self: Slash,
-        ctx: SlashContext,
-        reply_to: discord.Member = None,
-        public: bool = False,
-    ):
-        await ctx.respond(eat=True)
-        if reply_to:
-            try:
-                async for msg in ctx.channel.history(limit=10):
-                    if msg.author == reply_to:
-                        return await msg.reply(content)
-            except (
-                discord.Forbidden,
-                discord.HTTPException,
-                discord.NotFound,
-                TypeError,
-                ValueError,
-            ):
-                await ctx.send(
-                    content="Couldn't find message to reply. Normally sending content.",
-                    hidden=True,
-                )
-
-        await ctx.send(content=content, hidden=not public)
-
-        self.analytics.view(ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild, command_name)
-
-    return _handler
 
 
 def setup(bot):
