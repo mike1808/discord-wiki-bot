@@ -21,8 +21,8 @@ from bot.feedback import Feedback
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
 
-WIKI_COMMAND = "wiki"
-WIKI_MANAGEMENT_COMMAND = "wiki-mgmt"
+WIKI_COMMAND = config.command_prefix + "wiki"
+WIKI_MANAGEMENT_COMMAND = config.command_prefix + "wiki-mgmt"
 
 MANAGE_CHANNELS = discord.Permissions()
 MANAGE_CHANNELS.manage_channels = True
@@ -33,19 +33,13 @@ def allow_only(permissions: discord.Permissions):
         @functools.wraps(func)
         async def wrapper(self, ctx: SlashContext, *args, **kwargs):
             user: discord.Member = (
-                ctx.author
-                if not isinstance(ctx.author, int)
-                else await ctx.guild.fetch_member(ctx.author)
+                ctx.author if not isinstance(ctx.author, int) else await ctx.guild.fetch_member(ctx.author)
             )
             if user.guild_permissions >= permissions:
                 return await func(self, ctx, *args, **kwargs)
             else:
                 await ctx.respond()
-                author_id = (
-                    ctx.author.id
-                    if isinstance(ctx.author, discord.Member)
-                    else ctx.author
-                )
+                author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
                 self.logger.info("Denied access to member: %d", author_id)
                 return await ctx.send(
                     content="You are not allowed to manage Wiki topics!",
@@ -60,21 +54,106 @@ class Slash(commands.Cog):
     def __init__(self, bot: discord.ext.commands.Bot):
         if not hasattr(bot, "slash"):
             # Creates new SlashCommand instance to bot if bot doesn't have.
-            bot.slash = SlashCommand(
-                bot, override_type=True, auto_register=True, auto_delete=True
-            )
+            bot.slash = SlashCommand(bot, override_type=True, auto_register=True, auto_delete=True)
+
         self.bot = bot
-        self.bot.slash.get_cog_commands(self)
+        self.slash = bot.slash
+
+        self.bot.loop.create_task(self._setup_wiki_commands())
+
+        self.slash.get_cog_commands(self)
+
         self.analytics = Analytics()
         self.logger = logging.getLogger("wikibot.slash")
         self.feedback = Feedback()
 
     async def reload_commands(self):
-        self.bot.slash.get_cog_commands(self)
-        await self.bot.slash.register_all_commands()
+        await self.slash.register_all_commands()
+
+    @db_session
+    async def _setup_wiki_commands(self):
+        for topic in Topic.select():
+            self._add_wiki_command(
+                int(topic.guild.id),
+                topic.group,
+                topic.key,
+                topic.desc,
+                topic.content,
+            )
+
+    def _add_wiki_command(self, guild: int, group: str, key: str, desc: str, content: str):
+        self.slash.subcommand(
+            base=WIKI_COMMAND,
+            name=key,
+            description=desc,
+            subcommand_group=group,
+            options=[
+                manage_commands.create_option(
+                    name="reply_to",
+                    description="reply to the last message of specified user",
+                    option_type=SlashCommandOptionType.USER,
+                    required=False,
+                ),
+                manage_commands.create_option(
+                    name="public",
+                    description="make the response be visible for everyone else in the channel",
+                    option_type=SlashCommandOptionType.BOOLEAN,
+                    required=False,
+                ),
+            ],
+            guild_ids=[guild],
+        )(self._topic_handler(f"{group}/{key}", content))
+
+    def _delete_wiki_command(self, guild_id: int, group: str, key: str):
+        command = None
+
+        if WIKI_COMMAND in self.slash.subcommands:
+            if group in self.slash.subcommands[WIKI_COMMAND]:
+                if key in self.slash.subcommands[WIKI_COMMAND][group]:
+                    if guild_id in self.slash.subcommands[WIKI_COMMAND][group][key].allowed_guild_ids:
+                        command = self.slash.subcommands[WIKI_COMMAND][group][key]
+
+        command.allowed_guild_ids = [g for g in command.allowed_guild_ids if g != guild_id]
+        if len(command.allowed_guild_ids) == 0:
+            del self.slash.subcommands[WIKI_COMMAND][group][key]
+
+        setattr(Slash, f"__{guild_id}_{group}_{key}", None)
+
+    def _topic_handler(self, command_name: str, content: str):
+        async def _handler(
+            ctx: SlashContext,
+            reply_to: discord.Member = None,
+            public: bool = False,
+        ):
+            await ctx.respond(eat=True)
+            if reply_to:
+                try:
+                    async for msg in ctx.channel.history(limit=10):
+                        if msg.author == reply_to:
+                            return await msg.reply(content)
+                except (
+                    discord.Forbidden,
+                    discord.HTTPException,
+                    discord.NotFound,
+                    TypeError,
+                    ValueError,
+                ):
+                    await ctx.send(
+                        content="Couldn't find message to reply. Normally sending content.",
+                        hidden=True,
+                    )
+
+            await ctx.send(content=content, hidden=not public)
+
+            self.analytics.view(
+                ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild,
+                command_name,
+            )
+
+        return _handler
 
     def cog_unload(self):
-        self.bot.slash.remove_cog_commands(self)
+        self.slash.remove_cog_commands(self)
         self.feedback.close()
 
     @cog_ext.cog_subcommand(
@@ -111,17 +190,11 @@ class Slash(commands.Cog):
     )
     @allow_only(MANAGE_CHANNELS)
     @db_session
-    async def _topic_upsert(
-        self, ctx: SlashContext, group: str, key: str, description: str, content: str
-    ):
+    async def _topic_upsert(self, ctx: SlashContext, group: str, key: str, description: str, content: str):
         await ctx.respond()
-        topic, new = db.upsert_topic(
-            str(ctx.guild.id), group, key, description, content
-        )
+        topic, new = db.upsert_topic(str(ctx.guild.id), group, key, description, content)
 
-        author_id = (
-            ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
-        )
+        author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
         self.logger.info(
             f"upserting new topic: %d /{WIKI_COMMAND} %s %s %s %s by member: %d",
             ctx.guild.id,
@@ -135,8 +208,7 @@ class Slash(commands.Cog):
         # TODO: remove this and figure out how to make @db_session work with async
         commit()
 
-        self.bot.slash.remove_cog_commands(self)
-        add_wiki_command(ctx.guild.id, group, key, description, content)
+        self._add_wiki_command(ctx.guild.id, group, key, description, content)
 
         action = "added" if new else "modified"
         try:
@@ -182,11 +254,7 @@ class Slash(commands.Cog):
     @db_session
     async def _topic_delete(self, ctx: SlashContext, group: str, key: str):
         await ctx.respond()
-        topic = Topic.select(
-            lambda t: t.guild.id == str(ctx.guild.id)
-            and t.group == group
-            and t.key == key
-        ).first()
+        topic = Topic.select(lambda t: t.guild.id == str(ctx.guild.id) and t.group == group and t.key == key).first()
 
         if topic is None:
             await ctx.send(
@@ -195,9 +263,7 @@ class Slash(commands.Cog):
             )
             return
 
-        author_id = (
-            ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
-        )
+        author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
         self.logger.info(
             f"deleteing topic: %d /{WIKI_COMMAND} %s %s by member: %d",
             ctx.guild.id,
@@ -205,8 +271,7 @@ class Slash(commands.Cog):
             key,
             author_id,
         )
-        self.bot.slash.remove_cog_commands(self)
-        delete_wiki_command(ctx.guild.id, group, key)
+        self._delete_wiki_command(ctx.guild.id, group, key)
         topic.delete()
         # TODO: remove this and figure out how to make @db_session work with async
         commit()
@@ -224,13 +289,9 @@ class Slash(commands.Cog):
     @db_session
     async def _analytics(self, ctx: SlashContext):
         await ctx.respond()
-        views = self.analytics.retreive(
-            ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild
-        )
+        views = self.analytics.retreive(ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild)
 
-        embed = discord.Embed(
-            title="Wiki Analytics", color=discord.Color.from_rgb(225, 225, 225)
-        )
+        embed = discord.Embed(title="Wiki Analytics", color=discord.Color.from_rgb(225, 225, 225))
         embed.set_footer(text=self.bot.user, icon_url=self.bot.user.avatar_url)
         for (command, view_count) in views:
             embed.add_field(name=command, value=str(view_count), inline=False)
@@ -268,9 +329,7 @@ class Slash(commands.Cog):
     @db_session
     async def _bulk_export(self, ctx: SlashContext):
         await ctx.respond()
-        author_id = (
-            ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
-        )
+        author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
         self.logger.info(
             f"sending export by request of member: %d",
             author_id,
@@ -305,9 +364,7 @@ class Slash(commands.Cog):
     async def _bulk_import(self, ctx: SlashContext):
         await ctx.respond()
 
-        author_id = (
-            ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
-        )
+        author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
         self.logger.info(
             f"trying to import by request of member: %d",
             author_id,
@@ -348,26 +405,18 @@ class Slash(commands.Cog):
                 hidden=True,
             )
 
-        self.bot.slash.remove_cog_commands(self)
-
         added = 0
         updated = 0
 
-        csvreader = csv.reader(
-            io.StringIO(csvcontent.read().decode("utf-8")), quoting=csv.QUOTE_MINIMAL
-        )
+        csvreader = csv.reader(io.StringIO(csvcontent.read().decode("utf-8")), quoting=csv.QUOTE_MINIMAL)
         for row in csvreader:
-            topic, new = db.upsert_topic(
-                str(ctx.guild.id), row[0], row[1], row[2], row[3]
-            )
+            topic, new = db.upsert_topic(str(ctx.guild.id), row[0], row[1], row[2], row[3])
             if new:
                 added += 1
             else:
                 updated += 1
 
-            add_wiki_command(
-                ctx.guild.id, topic.group, topic.key, topic.desc, topic.content
-            )
+            self._add_wiki_command(ctx.guild.id, topic.group, topic.key, topic.desc, topic.content)
 
         # TODO: remove this and figure out how to make @db_session work with async
         commit()
@@ -403,9 +452,7 @@ class Slash(commands.Cog):
         )
 
         try:
-            self.feedback.send_feedback(
-                author.id, author.name, ctx.guild.id, ctx.guild.name, feedback
-            )
+            self.feedback.send_feedback(author.id, author.name, ctx.guild.id, ctx.guild.name, feedback)
         except Exception as e:
             self.logger.critical("Failed to send feeback", e, exc_info=True)
 
@@ -488,13 +535,10 @@ def topic_handler(command_name: str, content: str):
 
         await ctx.send(content=content, hidden=not public)
 
-        self.analytics.view(
-            ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild, command_name
-        )
+        self.analytics.view(ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild, command_name)
 
     return _handler
 
 
 def setup(bot):
-    setup_wiki_commands()
     bot.add_cog(Slash(bot))

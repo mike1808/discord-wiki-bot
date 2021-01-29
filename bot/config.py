@@ -8,7 +8,9 @@ load_dotenv()
 DB = namedtuple("DB", ["user", "password", "host", "database", "populate"])
 Redis = namedtuple("Redis", ["host"])
 SMTP = namedtuple("SMTP", ["host", "email", "password", "from_email"])
-Config = namedtuple("Config", ["db", "redis", "discord_token", "dev_guild_id", "smtp"])
+Config = namedtuple(
+    "Config", ["db", "redis", "discord_token", "dev_guild_id", "smtp", "command_prefix"]
+)
 
 config = Config(
     db=DB(
@@ -31,4 +33,5 @@ config = Config(
         from_email=os.getenv("WIKIBOT_SMTP_FROM_EMAIL"),
         password=os.getenv("WIKIBOT_SMTP_PASSWORD"),
     ),
+    command_prefix=os.getenv("WIKIBOT_COMMAND_PREFIX"),
 )
