@@ -4,6 +4,7 @@ import functools
 import io
 import json
 import logging
+import typing
 
 import discord
 import discord.ext.commands
@@ -19,7 +20,7 @@ from bot.analytics import Analytics
 from bot.config import config
 from bot.db import Guild, Topic
 from bot.feedback import Feedback
-from bot.util import check_has_permissions
+from bot.util import check_has_permissions, Context
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
 
@@ -54,6 +55,41 @@ class Slash(commands.Cog):
     async def _reload_commands(self):
         await self.slash.register_all_commands()
 
+    @commands.command(name=WIKI_COMMAND)
+    async def _fallback_wiki_command(self, ctx: commands.Context, *args):
+        def find_slash_command(
+            group, path
+        ) -> typing.Tuple[typing.Union[discord_slash.model.SubcommandObject, None], list[str]]:
+            if len(path) == 0 or ":" in path[0]:
+                return (group, path)
+
+            if path[0] in group:
+                return find_slash_command(group[path[0]], path[1:])
+
+            return (None, path)
+
+        command, command_args = find_slash_command(self.slash.subcommands[WIKI_COMMAND], args)
+        if command is None:
+            return
+
+        guild_id = ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild
+        if guild_id not in command.allowed_guild_ids:
+            return
+
+        command_args = parse_command_args(
+            command_args,
+        )
+        if "reply_to" in command_args:
+            cached = ctx.guild.get_member(int(command_args["reply_to"]))
+            if cached:
+                command_args["reply_to"] = cached
+            else:
+                command_args["reply_to"] = await ctx.guild.fetch_member(int(command_args["reply_to"]))
+        else:
+            command_args["reply_to"] = None
+
+        await command.invoke(*[Context(ctx), command_args["reply_to"], False])
+
     @db_session
     async def _setup_wiki_commands(self):
         for topic in Topic.select():
@@ -66,12 +102,12 @@ class Slash(commands.Cog):
             )
 
     def _topic_handler(self, command_name: str, content: str):
-        async def _handler(
-            ctx: SlashContext,
+        async def _wiki_topic(
+            ctx: Context,
             reply_to: discord.Member = None,
             public: bool = False,
         ):
-            await ctx.respond(eat=True)
+            await ctx.respond(eat=False)
             if reply_to:
                 try:
                     async for msg in ctx.channel.history(limit=10):
@@ -96,7 +132,7 @@ class Slash(commands.Cog):
                 command_name,
             )
 
-        return _handler
+        return _wiki_topic
 
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
@@ -315,8 +351,6 @@ class Slash(commands.Cog):
         csvcontent = None
         try:
             async for msg in ctx.channel.history(limit=5):
-                if len(msg.attachments) > 0:
-                    print(msg.attachments[0].filename)
                 if (
                     msg.author.id == author_id
                     and len(msg.attachments) > 0
@@ -472,8 +506,15 @@ class Slash(commands.Cog):
         if len(command.allowed_guild_ids) == 0:
             del self.slash.subcommands[WIKI_COMMAND][group][key]
 
-        setattr(Slash, f"__{guild_id}_{group}_{key}", None)
+
+def parse_command_args(args: list[str]) -> dict[str, object]:
+    ret = {}
+    for arg in args:
+        k, v = arg.split(":", maxsplit=1)
+        ret[k] = v
+
+    return ret
 
 
-def setup(bot):
+def setup(bot: commands.Bot):
     bot.add_cog(Slash(bot))

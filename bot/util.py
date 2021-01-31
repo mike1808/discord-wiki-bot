@@ -1,6 +1,8 @@
 import discord
 import functools
 from discord_slash import SlashContext
+from discord_slash import SlashCommand, SlashCommandOptionType, SlashContext, cog_ext
+from discord.ext import commands
 import typing
 
 
@@ -28,3 +30,26 @@ def check_has_permissions(**kwargs):
         return wrapper
 
     return decorate
+
+
+class Context:
+    def __init__(self, context: typing.Union[commands.Context, SlashContext]):
+        self.context = context
+
+    async def send(self, *args, **kwargs):
+        if isinstance(self.context, SlashContext):
+            return await self.context.send(*args, **kwargs)
+        else:
+            return await self.context.send(kwargs["content"])
+
+    async def respond(self, *args, **kwargs):
+        if isinstance(self.context, SlashContext):
+            return await self.context.respond(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.context, name)
+
+
+class Subcommand(cog_ext.CogSubcommandObject, commands.Command):
+    def __init__(self, func, name, **attrs):
+        pass
