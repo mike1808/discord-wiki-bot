@@ -19,6 +19,7 @@ from bot.analytics import Analytics
 from bot.config import config
 from bot.db import Guild, Topic
 from bot.feedback import Feedback
+from bot.util import check_has_permissions
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
 
@@ -27,28 +28,6 @@ WIKI_MANAGEMENT_COMMAND = config.command_prefix + "wiki-mgmt"
 
 MANAGE_CHANNELS = discord.Permissions()
 MANAGE_CHANNELS.manage_channels = True
-
-
-def allow_only(permissions: discord.Permissions):
-    def decorate(func):
-        @functools.wraps(func)
-        async def wrapper(self, ctx: SlashContext, *args, **kwargs):
-            user: discord.Member = (
-                ctx.author if not isinstance(ctx.author, int) else await ctx.guild.fetch_member(ctx.author)
-            )
-            if user.guild_permissions >= permissions:
-                return await func(self, ctx, *args, **kwargs)
-            else:
-                await ctx.respond()
-                author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
-                self.logger.info("Denied access to member: %d", author_id)
-                return await ctx.send(
-                    content="You are not allowed to manage Wiki topics!",
-                )
-
-        return wrapper
-
-    return decorate
 
 
 class Slash(commands.Cog):
@@ -151,7 +130,7 @@ class Slash(commands.Cog):
             ),
         ],
     )
-    @allow_only(MANAGE_CHANNELS)
+    @check_has_permissions(manage_channels=True)
     @db_session
     async def _topic_upsert(self, ctx: SlashContext, group: str, key: str, description: str, content: str):
         await ctx.respond()
@@ -213,7 +192,7 @@ class Slash(commands.Cog):
             ),
         ],
     )
-    @allow_only(MANAGE_CHANNELS)
+    @check_has_permissions(manage_channels=True)
     @db_session
     async def _topic_delete(self, ctx: SlashContext, group: str, key: str):
         await ctx.respond()
@@ -248,7 +227,7 @@ class Slash(commands.Cog):
         description="Get commands usage analytics",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
-    @allow_only(MANAGE_CHANNELS)
+    @check_has_permissions(manage_channels=True)
     @db_session
     async def _analytics(self, ctx: SlashContext):
         await ctx.respond()
@@ -268,7 +247,7 @@ class Slash(commands.Cog):
         description=f"Show help with `/{WIKI_MANAGEMENT_COMMAND} import` commands",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
-    @allow_only(MANAGE_CHANNELS)
+    @check_has_permissions(manage_channels=True)
     async def _bulk_help(self, ctx: SlashContext):
         await ctx.respond(eat=True)
         await ctx.send(
@@ -288,7 +267,7 @@ class Slash(commands.Cog):
         description=f"Export all existing topics to CSV file",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
-    @allow_only(MANAGE_CHANNELS)
+    @check_has_permissions(manage_channels=True)
     @db_session
     async def _bulk_export(self, ctx: SlashContext):
         await ctx.respond()
@@ -322,7 +301,7 @@ class Slash(commands.Cog):
         description=f"Import topics from CSV file",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
-    @allow_only(MANAGE_CHANNELS)
+    @check_has_permissions(manage_channels=True)
     @db_session
     async def _bulk_import(self, ctx: SlashContext):
         await ctx.respond()
