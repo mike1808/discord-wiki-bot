@@ -107,7 +107,7 @@ class Slash(commands.Cog):
             reply_to: discord.Member = None,
             public: bool = False,
         ):
-            await ctx.respond(eat=False)
+            await ctx.respond(eat=not public or reply_to is None)
             if reply_to:
                 try:
                     async for msg in ctx.channel.history(limit=10):
