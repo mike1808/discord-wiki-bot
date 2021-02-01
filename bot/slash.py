@@ -18,7 +18,7 @@ from pony.orm import commit, db_session, select
 from bot import db
 from bot.analytics import Analytics
 from bot.config import config
-from bot.db import Guild, Topic
+from bot.db import Guild, Topic, guild_topics
 from bot.feedback import Feedback
 from bot.util import check_has_permissions, Context
 
@@ -318,12 +318,12 @@ class Slash(commands.Cog):
         csvwriter.writerow(["group", "key", "desc", "content"])
         count = 0
 
-        for t in Topic.select(lambda t: t.guild.id == str(ctx.guild.id)):
+        for t in guild_topics(str(ctx.guild.id)):
             csvwriter.writerow([t.group, t.key, t.desc, t.content])
             count += 1
 
         await ctx.send(
-            content=f"We successfuly exported f{count} topcs!",
+            content=f"We successfuly exported **{count}** topcs!",
             file=discord.File(
                 io.BytesIO(str.encode(csvoutput.getvalue())),
                 filename=f"wiki_topics_{datetime.datetime.utcnow()}.csv",
@@ -398,7 +398,7 @@ class Slash(commands.Cog):
         commit()
         await self._reload_commands()
         await ctx.send(
-            content=f"Import was successfuly finished! {added} added and {updated} updated.",
+            content=f"Import was successfuly finished! **{added}** added and **{updated}** updated.",
         )
 
     @cog_ext.cog_subcommand(
@@ -440,6 +440,7 @@ class Slash(commands.Cog):
         description=f"Get help about WikiBot commands",
         guild_ids=[config.dev_guild_id] if config.dev_guild_id else None,
     )
+    @db_session
     async def _help(self, ctx: SlashContext):
         await ctx.respond(eat=True)
 
@@ -467,6 +468,14 @@ class Slash(commands.Cog):
                 value=help,
                 inline=False,
             )
+
+        embed.add_field(
+            name=f":grey_question: Available /{WIKI_COMMAND} commands",
+            value="\n".join(
+                [f"`/{WIKI_COMMAND} {t.group} {t.key}`: {t.desc}" for t in guild_topics(str(ctx.guild.id))]
+            ),
+            inline=False,
+        )
 
         await author.send(embed=embed)
 

@@ -1,5 +1,6 @@
 import csv
 import sys
+from collections.abc import Iterable
 
 from pony.orm import *
 
@@ -30,10 +31,8 @@ class Topic(db.Entity):
     composite_key(guild, group, key)
 
 
-def upsert_topic(guild_id, group, key, desc, content):
-    topic = Topic.select(
-        lambda t: t.guild.id == guild_id and t.group == group and t.key == key
-    ).first()
+def upsert_topic(guild_id: str, group: str, key: str, desc: str, content: str) -> tuple[Topic, bool]:
+    topic = Topic.select(lambda t: t.guild.id == guild_id and t.group == group and t.key == key).first()
 
     if topic is None:
         topic = Topic(
@@ -52,7 +51,7 @@ def upsert_topic(guild_id, group, key, desc, content):
     return (topic, new)
 
 
-def upsert_guild(guild_id, guild_name):
+def upsert_guild(guild_id: str, guild_name: str) -> tuple[Guild, bool]:
     try:
         guild = Guild[guild_id]
     except ObjectNotFound:
@@ -65,8 +64,12 @@ def upsert_guild(guild_id, guild_name):
     return (guild, new)
 
 
+def guild_topics(guild_id: str) -> Iterable[Topic]:
+    return Topic.select(lambda t: t.guild.id == str(guild_id)).order_by(Topic.group, Topic.key)
+
+
 def setup():
-    set_sql_debug(True)
+    # set_sql_debug(True)
     db.generate_mapping(create_tables=True)
 
 
