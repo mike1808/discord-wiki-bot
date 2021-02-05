@@ -471,9 +471,8 @@ class Slash(commands.Cog):
 
         embed.add_field(
             name=f":grey_question: Available /{WIKI_COMMAND} commands",
-            value="\n".join(
-                [f"`/{WIKI_COMMAND} {t.group} {t.key}`: {t.desc}" for t in guild_topics(str(ctx.guild.id))]
-            ),
+            value="\n".join([f"`/{WIKI_COMMAND} {t.group} {t.key}`: {t.desc}" for t in guild_topics(str(ctx.guild.id))])
+            or "No commands available",
             inline=False,
         )
 
