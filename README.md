@@ -10,6 +10,8 @@ You can add already deployed bot to your server from
 
 ## Installation
 
+### Local or docker-compose
+
 WikiBot requires Python 3.7+ and has few external dependencies:
 
 * PostgreSQL - for storing data such wiki topics or joined guilds
@@ -34,4 +36,27 @@ docker-compose up -d
 > are cached in Discord for one hour, so for any change you have to wait at
 > least an hour.
 
+### Kubernetes
+
+You can deploy WikiBot to your Kubernetes cluster.
+
+#### Requirements
+
+You need few external tools to deploy to your cluster:
+
+* [ytt](https://carvel.dev/ytt/) - for config templating
+* [kapp](https://carvel.dev/kapp/) - for deployment
+
+Also, you have to copy `sample-values.yml` to `values.yml` and edit the
+appropriate values.
+
+#### Deploying
+
+To deploy, run:
+
+```bash
+ytt -f deploy -f values.yml | kapp deploy -a wikibot -n wikibot -y -f -
+```
+
+It will render templates and deploy to `wikibot` namespace.
 

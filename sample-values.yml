@@ -1,0 +1,11 @@
+#@data/values
+---
+wikibot:
+  discord_token: "bot secret"
+  dev_guild_id: "ID of your development guild, if present all commands will be added to the guild"
+  command_prefix: "prefix for commands to work on development commands"
+  smtp: #! used for sending feedback, optional
+    host: ""
+    email: ""
+    from_email: ""
+    password: ""

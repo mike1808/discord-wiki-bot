@@ -1,0 +1,50 @@
+#@ load("@ytt:data", "data")
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wikibot-config #! cannot name it `wikibot` because of kapp
+data:
+  WIKIBOT_SMTP_HOST: #@ data.values.wikibot.smtp.host
+  WIKIBOT_SMTP_EMAIL: #@ data.values.wikibot.smtp.email
+  WIKIBOT_SMTP_FROM_EMAIL: #@ data.values.wikibot.smtp.from_email
+  WIKIBOT_COMMAND_PREFIX: #@ data.values.wikibot.command_prefix
+  DISCORD_DEV_GUILD_ID: #@ data.values.wikibot.dev_guild_id
+  POSTGRES_HOST: postgres
+  POSTGRES_DB: #@ data.values.postgres.db
+  POSTGRES_USER: #@ data.values.postgres.user
+  REDIS_HOST: redis
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wikibot
+stringData:
+  DISCORD_TOKEN: #@ data.values.wikibot.discord_token
+  WIKIBOT_SMTP_PASSWORD: #@ data.values.wikibot.smtp.password
+  POSTGRES_PASSWORD: #@ data.values.postgres.password
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wikibot
+  labels:
+    app: wikibot
+spec:
+  selector:
+    matchLabels:
+      app: wikibot
+  template:
+    metadata:
+      labels:
+        app: wikibot
+    spec:
+      containers:
+        - name: wikibot
+          image: mike1808/discord-wiki-bot:latest
+          envFrom:
+          - configMapRef:
+              name: wikibot-config
+          - secretRef:
+              name: wikibot

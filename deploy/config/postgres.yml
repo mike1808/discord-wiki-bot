@@ -1,0 +1,88 @@
+#@ load("@ytt:data", "data")
+
+#!  kind: PersistentVolume
+#!  apiVersion: v1
+#!  metadata:
+#!    name: postgres
+#!    labels:
+#!      type: local
+#!      app: postgres
+#!  spec:
+#!    storageClassName: manual
+#!    capacity:
+#!      storage: 2Gi
+#!    accessModes:
+#!      - ReadWriteMany
+#!    hostPath:
+#!      path: "/mnt/data"
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+data:
+  POSTGRES_DB: #@ data.values.postgres.db
+  POSTGRES_USER: #@ data.values.postgres.user
+  POSTGRES_PASSWORD: #@ data.values.postgres.password
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: postgres
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - image: postgres
+        name: postgres
+        resources: {}
+        ports:
+          - containerPort: 5432
+            name: postgres
+        envFrom:
+        - configMapRef:
+            name: postgres
+      volumes:
+      - name: postgresdb
+        persistentVolumeClaim:
+          claimName: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  ports:
+   - port: 5432
+  selector:
+   app: postgres
