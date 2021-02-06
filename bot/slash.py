@@ -255,7 +255,9 @@ class Slash(commands.Cog):
     @db_session
     async def _topic_delete(self, ctx: SlashContext, group: str, key: str):
         await ctx.respond()
-        topic = Topic.select(lambda t: t.guild.id == str(ctx.guild.id) and t.group == group and t.key == key).first()
+        topic = Topic.select(
+            lambda t: t.guild.id == str(ctx.guild.id) and t.group == str.lower(group) and t.key == str.lower(key)
+        ).first()
 
         if topic is None:
             await ctx.send(
@@ -266,7 +268,7 @@ class Slash(commands.Cog):
 
         author_id = ctx.author.id if not isinstance(ctx.author, int) else ctx.author
         self.logger.info(
-            f"deleteing topic: %d /{WIKI_COMMAND} %s %s by member: %d",
+            f"deleting topic: %d /{WIKI_COMMAND} %s %s by member: %d",
             ctx.guild.id,
             group,
             key,

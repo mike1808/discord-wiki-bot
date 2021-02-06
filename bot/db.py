@@ -40,6 +40,9 @@ class Feedback(db.Entity):
 
 
 def upsert_topic(guild_id: str, group: str, key: str, desc: str, content: str) -> tuple[Topic, bool]:
+    group = str.lower(group)
+    key = str.lower(key)
+
     topic = Topic.select(lambda t: t.guild.id == guild_id and t.group == group and t.key == key).first()
 
     if topic is None:
