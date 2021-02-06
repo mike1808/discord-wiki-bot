@@ -10,7 +10,7 @@ Redis = namedtuple("Redis", ["host"])
 SMTP = namedtuple("SMTP", ["host", "email", "password", "from_email"])
 Config = namedtuple(
     "Config",
-    ["db", "redis", "discord_token", "dev_guild_id", "smtp", "command_prefix"],
+    ["db", "redis", "discord_token", "dev_guild_ids", "smtp", "command_prefix"],
     defaults=[None, None, "", None, None, ""],
 )
 
@@ -26,7 +26,9 @@ config = Config(
         host=os.getenv("REDIS_HOST"),
     ),
     discord_token=os.getenv("DISCORD_TOKEN"),
-    dev_guild_id=int(os.getenv("DISCORD_DEV_GUILD_ID")) if os.getenv("DISCORD_DEV_GUILD_ID") else None,
+    dev_guild_ids=[int(s) for s in os.getenv("DISCORD_DEV_GUILD_IDS").split(",")]
+    if os.getenv("DISCORD_DEV_GUILD_IDS")
+    else None,
     smtp=SMTP(
         host=os.getenv("WIKIBOT_SMTP_HOST"),
         email=os.getenv("WIKIBOT_SMTP_EMAIL"),

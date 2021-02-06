@@ -18,7 +18,7 @@ logging.getLogger("wikibot").setLevel(logging.DEBUG)
 
 def setup():
     logging.basicConfig(level=logging.INFO)
-    logging.getLogger("discord_slash").setLevel(logging.DEBUG)
+    # logging.getLogger("discord_slash").setLevel(logging.DEBUG)
 
     logger.info("Runing DB setup")
     db.setup()
@@ -37,9 +37,7 @@ class HelpBot(commands.Bot):
 
     @db_session
     async def on_guild_join(self, guild: discord.Guild):
-        logger.info(
-            f"We have been added to a new guild! Hi: f{guild.id}: f{guild.name}"
-        )
+        logger.info(f"We have been added to a new guild! Hi: f{guild.id}: f{guild.name}")
         db.upsert_guild(str(guild.id), guild.name)
 
 
@@ -49,9 +47,7 @@ intents = discord.Intents()
 intents.messages = True
 intents.guilds = True
 
-bot = HelpBot(
-    "/", intents=intents, allowed_mentions=discord.AllowedMentions(everyone=False)
-)
+bot = HelpBot("/", intents=intents, allowed_mentions=discord.AllowedMentions(everyone=False))
 bot.load_extension("bot.slash")
 
 if __name__ == "__main__":
