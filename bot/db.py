@@ -19,6 +19,7 @@ class Guild(db.Entity):
     id = PrimaryKey(str)
     name = Optional(str)
     topics = Set("Topic")
+    feedbacks = Set("Feedback")
 
 
 class Topic(db.Entity):
@@ -29,6 +30,13 @@ class Topic(db.Entity):
     content = Required(str)
 
     composite_key(guild, group, key)
+
+
+class Feedback(db.Entity):
+    user_id = Required(str)
+    user_name = Required(str)
+    guild = Required(Guild)
+    message = Required(str)
 
 
 def upsert_topic(guild_id: str, group: str, key: str, desc: str, content: str) -> tuple[Topic, bool]:

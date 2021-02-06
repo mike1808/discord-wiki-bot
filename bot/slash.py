@@ -23,7 +23,7 @@ from bot.analytics import Analytics
 from bot.config import config
 from bot.db import Guild, Topic, guild_topics
 from bot.feedback import Feedback
-from bot.util import check_has_permissions, Context
+from bot.util import check_has_permissions, Context, parse_wiki_topic_args
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
 
@@ -92,32 +92,20 @@ class Slash(commands.Cog):
 
     @commands.command(name=WIKI_COMMAND)
     async def _fallback_wiki_command(self, ctx: commands.Context, *args):
-        def find_slash_command(
-            group, path
-        ) -> typing.Tuple[typing.Union[discord_slash.model.SubcommandObject, None], list[str]]:
-            if len(path) == 0 or ":" in path[0]:
-                return (group, path)
-
-            if path[0] in group:
-                return find_slash_command(group[path[0]], path[1:])
-
-            return (None, path)
-
-        command, command_args = find_slash_command(self.slash.subcommands[WIKI_COMMAND], args)
-        if command is None:
-            return
-
-        guild_id = ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild
-        if guild_id not in command.allowed_guild_ids:
+        wiki_group, wiki_key, command_args = parse_wiki_topic_args(args)
+        if wiki_group is None or wiki_key is None:
             return
 
         command_args = parse_command_args(
             command_args,
         )
-        if "reply_to" in command_args:
-            command_args["reply_to"] = command_args["reply_to"]
 
-        await command.invoke(**command_args)
+        my_ctx = Context(ctx)
+
+        try:
+            await self._topic_handler(my_ctx, wiki_group, wiki_key, **command_args)
+        except Exception as ex:
+            await self.on_slash_command_error(my_ctx, ex)
 
     @db_session
     async def _setup_wiki_commands(self):

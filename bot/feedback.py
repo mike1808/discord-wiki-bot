@@ -5,6 +5,8 @@ from email.mime.text import MIMEText
 import discord
 
 from bot.config import config
+import bot.db
+from pony.orm import db_session, commit
 
 
 class Feedback:
@@ -19,6 +21,7 @@ class Feedback:
         mailserver.login(config.smtp.email, config.smtp.password)
         self.mailserver = mailserver
 
+    @db_session
     def send_feedback(
         self,
         member_id: int,
@@ -27,6 +30,9 @@ class Feedback:
         guild_name: str,
         message: str,
     ):
+        feedback = bot.db.Feedback(user_id=str(member_id), user_name=member_nick, guild=str(guild_id), message=message)
+        commit()
+
         msg = MIMEMultipart()
         msg["From"] = "arm.localhost@gmail.com"
         msg["To"] = "arm.localhost@gmail.com"
@@ -39,9 +45,7 @@ class Feedback:
 
         msg.attach(MIMEText(message))
 
-        self.mailserver.sendmail(
-            config.smtp.from_email, config.smtp.email, msg.as_string()
-        )
+        self.mailserver.sendmail(config.smtp.from_email, config.smtp.email, msg.as_string())
 
     def close(self):
         self.mailserver.quit()

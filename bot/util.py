@@ -53,3 +53,13 @@ class Context:
 class Subcommand(cog_ext.CogSubcommandObject, commands.Command):
     def __init__(self, func, name, **attrs):
         pass
+
+
+def parse_wiki_topic_args(args):
+    if len(args) < 2:
+        return None, None, []
+
+    if len(args) == 2:
+        return args[0], args[1], []
+
+    return args[0], args[1], args[2:]
