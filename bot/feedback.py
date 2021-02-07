@@ -34,8 +34,8 @@ class Feedback:
         commit()
 
         msg = MIMEMultipart()
-        msg["From"] = "arm.localhost@gmail.com"
-        msg["To"] = "arm.localhost@gmail.com"
+        msg["From"] = config.smtp.from_email
+        msg["To"] = config.smtp.email
         msg["Subject"] = f"WikiBot: Feedback from {member_nick} from {guild_name}"
         message = (
             f"Guild ID: {guild_id}, Guild Name: {guild_name}"

@@ -453,7 +453,7 @@ class Slash(commands.Cog):
         try:
             self.feedback.send_feedback(author.id, author.name, ctx.guild.id, ctx.guild.name, feedback)
         except Exception as e:
-            self.logger.critical("Failed to send feeback", e, exc_info=True)
+            self.logger.critical("Failed to send feeback: %s", e, exc_info=True)
 
         await ctx.send("Thank you for your feedback!", hidden=True)
 
