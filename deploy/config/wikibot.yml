@@ -10,7 +10,7 @@ data:
   WIKIBOT_SMTP_EMAIL: #@ data.values.wikibot.smtp.email
   WIKIBOT_SMTP_FROM_EMAIL: #@ data.values.wikibot.smtp.from_email
   WIKIBOT_COMMAND_PREFIX: #@ data.values.wikibot.command_prefix
-  DISCORD_DEV_GUILD_ID: #@ data.values.wikibot.dev_guild_id
+  DISCORD_DEV_GUILD_IDS: #@ data.values.wikibot.dev_guild_ids
   POSTGRES_HOST: postgres
   POSTGRES_DB: #@ data.values.postgres.db
   POSTGRES_USER: #@ data.values.postgres.user
