@@ -90,6 +90,12 @@ class Slash(commands.Cog):
             f"Failed to process you command. Please try later or if the issue persist report it via `/{WIKI_COMMAND}-feedback` command"
         )
 
+    async def on_slash_command_error(self, err: commands.CommandError):
+        if isinstance(err, commands.CommandNotFound):
+            self.logger.warn("Command not found error: %s", err, exc_info=True)
+        else:
+            self.logger.error("Command error: %s", err, exc_info=True)
+
     @commands.command(name=WIKI_COMMAND)
     async def _fallback_wiki_command(self, ctx: commands.Context, *args):
         wiki_group, wiki_key, command_args = parse_wiki_topic_args(args)
@@ -111,12 +117,18 @@ class Slash(commands.Cog):
     async def _setup_wiki_commands(self):
         tasks: list[typing.Coroutine] = []
         for guild in Guild.select():
-            tasks.append(self.__sync_wiki_command(guild.id))
-        await self.slash.sync_all_commands()
+            tasks.append(self.__sync_wiki_command(int(guild.id)))
+        try:
+            await self.slash.sync_all_commands()
+        except Exception as ex:
+            self.logger.warn("Failed to sync slash commands: %s", ex, exc_info=True)
+
         result = await asyncio.gather(*tasks, return_exceptions=True)
         for res in result:
             if isinstance(res, Exception):
                 self.logger.critical("Failed to sync wiki commands: %s", res, exc_info=True)
+
+        self.logger.info("Syncing done.")
 
     @db_session
     async def _topic_handler(self, ctx: Context, group: str, key: str, **args):
@@ -541,7 +553,10 @@ class Slash(commands.Cog):
             }
             command["options"].append(subgroup)
 
-        await self.slash.req.add_slash_command(guild_id=guild_id, **command)
+        try:
+            await self.slash.req.add_slash_command(guild_id=guild_id, **command)
+        except discord.Forbidden as e:
+            self.logger.warn("Not syncing commands for guild: %s, Reason: %s", guild_id, e)
 
     def __delete_wiki_command(self, guild_id: int, group: str, key: str):
         command = None
