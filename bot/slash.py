@@ -40,7 +40,7 @@ class Slash(commands.Cog):
     def __init__(self, bot: discord.ext.commands.Bot):
         if not hasattr(bot, "slash"):
             # Creates new SlashCommand instance to bot if bot doesn't have.
-            bot.slash = SlashCommand(bot, override_type=True, auto_register=False, auto_delete=False)
+            bot.slash = SlashCommand(bot, override_type=True)
 
         self.bot = bot
         self.slash = bot.slash
@@ -56,9 +56,6 @@ class Slash(commands.Cog):
     def cog_unload(self):
         self.slash.remove_cog_commands(self)
         self.feedback.close()
-
-    async def _reload_commands(self):
-        await self.slash.register_all_commands()
 
     # Handle wiki topics
     @commands.Cog.listener()
@@ -90,7 +87,7 @@ class Slash(commands.Cog):
             f"Failed to process you command. Please try later or if the issue persist report it via `/{WIKI_COMMAND}-feedback` command"
         )
 
-    async def on_slash_command_error(self, err: commands.CommandError):
+    async def on_command_error(self, err: commands.CommandError):
         if isinstance(err, commands.CommandNotFound):
             self.logger.warn("Command not found error: %s", err, exc_info=True)
         else:
@@ -208,7 +205,7 @@ class Slash(commands.Cog):
         await ctx.respond()
         topic, new = db.upsert_topic(str(ctx.guild.id), group, key, description, content)
 
-        author_id = ctx.author.id if not isinstance(ctx.author, int) else ctx.author
+        author_id = ctx.author_id
         self.logger.info(
             f"upserting new topic: %d /{WIKI_COMMAND} %s %s %s %s by member: %d",
             ctx.guild.id,
@@ -278,7 +275,7 @@ class Slash(commands.Cog):
             )
             return
 
-        author_id = ctx.author.id if not isinstance(ctx.author, int) else ctx.author
+        author_id = ctx.author_id
         self.logger.info(
             f"deleting topic: %d /{WIKI_COMMAND} %s %s by member: %d",
             ctx.guild.id,
@@ -344,7 +341,7 @@ class Slash(commands.Cog):
     @db_session
     async def _bulk_export(self, ctx: SlashContext):
         await ctx.respond()
-        author_id = ctx.author.id if not isinstance(ctx.author, int) else ctx.author
+        author_id = ctx.author_id
         self.logger.info(
             f"sending export by request of member: %d",
             author_id,
@@ -379,7 +376,7 @@ class Slash(commands.Cog):
     async def _bulk_import(self, ctx: SlashContext):
         await ctx.respond()
 
-        author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
+        author_id = ctx.author_id
         self.logger.info(
             f"trying to import by request of member: %d",
             author_id,
@@ -454,16 +451,14 @@ class Slash(commands.Cog):
     async def _feedback(self, ctx: SlashContext, feedback: str):
         await ctx.respond(eat=True)
 
-        author: discord.Member = await ctx.guild.fetch_member(ctx.author)
-
         self.logger.info(
             f"member: %d:%s gave feedback",
-            author.id,
-            author.display_name,
+            ctx.author_id,
+            ctx.author.display_name,
         )
 
         try:
-            self.feedback.send_feedback(author.id, author.name, ctx.guild.id, ctx.guild.name, feedback)
+            self.feedback.send_feedback(ctx.author_id, ctx.author.display_name, ctx.guild.id, ctx.guild.name, feedback)
         except Exception as e:
             self.logger.critical("Failed to send feeback: %s", e, exc_info=True)
 
@@ -478,7 +473,7 @@ class Slash(commands.Cog):
     async def _help(self, ctx: SlashContext):
         await ctx.respond(eat=True)
 
-        author: discord.Member = await ctx.guild.fetch_member(ctx.author)
+        author = ctx.author
 
         embed = discord.Embed(title="Help", color=discord.Color.from_rgb(225, 225, 225))
         embed.set_footer(text=self.bot.user, icon_url=self.bot.user.avatar_url)
@@ -489,7 +484,7 @@ class Slash(commands.Cog):
             + f"\n`/{WIKI_HELP_COMMAND}`: {self.slash.commands[WIKI_HELP_COMMAND].description}",
             inline=False,
         )
-        if author.guild_permissions >= MANAGE_CHANNELS:
+        if isinstance(author, discord.Member) and author.guild_permissions >= MANAGE_CHANNELS:
             help = ""
             for (name, x) in self.slash.subcommands[WIKI_MANAGEMENT_COMMAND].items():
                 if isinstance(x, discord_slash.model.CogSubcommandObject):

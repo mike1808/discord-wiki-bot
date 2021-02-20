@@ -1,4 +1,4 @@
-git+https://github.com/eunwoo1104/discord-py-slash-command.git#egg=discord-py-slash-command
+discord-py-slash-command==1.0.9.4
 discord.py==1.6.0
 python-dotenv==0.15.0
 pony==0.7.14
