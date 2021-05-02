@@ -38,10 +38,6 @@ MANAGE_CHANNELS.manage_channels = True
 
 class Slash(commands.Cog):
     def __init__(self, bot: discord.ext.commands.Bot):
-        if not hasattr(bot, "slash"):
-            # Creates new SlashCommand instance to bot if bot doesn't have.
-            bot.slash = SlashCommand(bot, override_type=True)
-
         self.bot = bot
         self.slash = bot.slash
 
@@ -54,7 +50,6 @@ class Slash(commands.Cog):
         self.feedback = Feedback()
 
     def cog_unload(self):
-        self.slash.remove_cog_commands(self)
         self.feedback.close()
 
     # Handle wiki topics
@@ -132,8 +127,6 @@ class Slash(commands.Cog):
         public = args["public"] if "public" in args else False
         reply_to = args["reply_to"] if "reply_to" in args else None
 
-        await ctx.respond(eat=not public)
-
         topic = Topic.select(guild=str(ctx.guild.id), group=group, key=key).first()
         if topic is None:
             await ctx.send(content=f"Sorry we don't have anything about {group}/{key}", hidden=not public)
@@ -146,7 +139,9 @@ class Slash(commands.Cog):
             try:
                 async for msg in ctx.channel.history(limit=10):
                     if msg.author.id == reply_id and msg.type == discord.MessageType.default:
-                        return await msg.reply(content=content)
+                        await msg.reply(content=content)
+                        await ctx.send("Replied!", hidden=True)
+                        break
             except (
                 discord.Forbidden,
                 discord.HTTPException,
@@ -159,11 +154,11 @@ class Slash(commands.Cog):
                     content="Couldn't find message to reply. Normally sending content.",
                     hidden=True,
                 )
-
-        await ctx.send(content=content, hidden=not public)
+        else:
+            await ctx.send(content=content, hidden=not public)
 
         self.analytics.view(
-            ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild,
+            ctx.guild_id,
             f"{group}/{key}",
         )
 
@@ -202,7 +197,6 @@ class Slash(commands.Cog):
     @check_has_permissions(manage_channels=True)
     @db_session
     async def _topic_upsert(self, ctx: SlashContext, group: str, key: str, description: str, content: str):
-        await ctx.respond()
         topic, new = db.upsert_topic(str(ctx.guild.id), group, key, description, content)
 
         author_id = ctx.author_id
@@ -263,7 +257,6 @@ class Slash(commands.Cog):
     @check_has_permissions(manage_channels=True)
     @db_session
     async def _topic_delete(self, ctx: SlashContext, group: str, key: str):
-        await ctx.respond()
         topic = Topic.select(
             lambda t: t.guild.id == str(ctx.guild.id) and t.group == str.lower(group) and t.key == str.lower(key)
         ).first()
@@ -277,11 +270,7 @@ class Slash(commands.Cog):
 
         author_id = ctx.author_id
         self.logger.info(
-            f"deleting topic: %d /{WIKI_COMMAND} %s %s by member: %d",
-            ctx.guild.id,
-            group,
-            key,
-            author_id,
+            f"deleting topic: {ctx.guild.id} /{WIKI_COMMAND} {group} {key} by member: {author_id}",
         )
         topic.delete()
         # TODO: remove this and figure out how to make @db_session work with async
@@ -300,8 +289,7 @@ class Slash(commands.Cog):
     @check_has_permissions(manage_channels=True)
     @db_session
     async def _analytics(self, ctx: SlashContext):
-        await ctx.respond()
-        views = self.analytics.retreive(ctx.guild.id if not isinstance(ctx.guild, int) else ctx.guild)
+        views = self.analytics.retreive(ctx.guild.id)
 
         embed = discord.Embed(title="Wiki Analytics", color=discord.Color.from_rgb(225, 225, 225))
         embed.set_footer(text=self.bot.user, icon_url=self.bot.user.avatar_url)
@@ -319,10 +307,9 @@ class Slash(commands.Cog):
     )
     @check_has_permissions(manage_channels=True)
     async def _bulk_help(self, ctx: SlashContext):
-        await ctx.respond(eat=True)
         await ctx.send(
             content='Bulk import and export commands consume and produce CSV files. CSV files should be delimited with a single quota `,` and use double quotes `"`.'
-            + "\nIt should contain 4 columns and the header is optional. Those columns are `group,key,description,content.`."
+            + "\nIt should contain 4 columns and the header is optional. Those columns are `group,key,description,content`."
             + "\nTo import your topics you should create a CSV file and upload it to Discord in the same channel where you are going to use the import command."
             + f"\nThen you have to use the `/{WIKI_COMMAND} bulk import` command to import the topics."
             + "\nWikiBot will search the latest 5 messages in the channel and select the latest your message and try to download your CSV file."
@@ -340,7 +327,8 @@ class Slash(commands.Cog):
     @check_has_permissions(manage_channels=True)
     @db_session
     async def _bulk_export(self, ctx: SlashContext):
-        await ctx.respond()
+        await ctx.defer()
+
         author_id = ctx.author_id
         self.logger.info(
             f"sending export by request of member: %d",
@@ -374,7 +362,7 @@ class Slash(commands.Cog):
     @check_has_permissions(manage_channels=True)
     @db_session
     async def _bulk_import(self, ctx: SlashContext):
-        await ctx.respond()
+        await ctx.defer()
 
         author_id = ctx.author_id
         self.logger.info(
@@ -449,8 +437,6 @@ class Slash(commands.Cog):
     )
     @db_session
     async def _feedback(self, ctx: SlashContext, feedback: str):
-        await ctx.respond(eat=True)
-
         self.logger.info(
             f"member: %d:%s gave feedback",
             ctx.author_id,
@@ -471,8 +457,6 @@ class Slash(commands.Cog):
     )
     @db_session
     async def _help(self, ctx: SlashContext):
-        await ctx.respond(eat=True)
-
         author = ctx.author
 
         embed = discord.Embed(title="Help", color=discord.Color.from_rgb(225, 225, 225))
@@ -507,6 +491,7 @@ class Slash(commands.Cog):
         )
 
         await author.send(embed=embed)
+        await ctx.send("Check your DMs for help!", hidden=True)
 
     @db_session
     async def __sync_wiki_command(self, guild_id: int):

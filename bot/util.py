@@ -15,13 +15,12 @@ def check_has_permissions(**kwargs):
             user: typing.Union[discord.Member, None] = None
 
             if not isinstance(ctx.guild, int):
-                user = ctx.author if not isinstance(ctx.author, int) else await ctx.guild.fetch_member(ctx.author)
+                user = ctx.author if not isinstance(ctx.author, int) else await ctx.guild.fetch_member(ctx.author_id)
 
             if user is not None and user.guild_permissions >= permissions:
                 return await func(self, ctx, *args, **kwargs)
             else:
-                await ctx.respond()
-                author_id = ctx.author.id if isinstance(ctx.author, discord.Member) else ctx.author
+                author_id = ctx.author_id
                 self.logger.info("Denied access to member: %d", author_id)
                 return await ctx.send(
                     content="You are not allowed to manage Wiki topics!",
@@ -41,10 +40,6 @@ class Context:
             return await self.context.send(*args, **kwargs)
         else:
             return await self.context.send(kwargs["content"])
-
-    async def respond(self, *args, **kwargs):
-        if isinstance(self.context, SlashContext):
-            return await self.context.respond(*args, **kwargs)
 
     def __getattr__(self, name):
         return getattr(self.context, name)
