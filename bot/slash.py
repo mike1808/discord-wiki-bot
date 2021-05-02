@@ -124,12 +124,12 @@ class Slash(commands.Cog):
 
     @db_session
     async def _topic_handler(self, ctx: Context, group: str, key: str, **args):
-        public = args["public"] if "public" in args else False
+        hidden = args["hidden"] if "hidden" in args else False
         reply_to = args["reply_to"] if "reply_to" in args else None
 
         topic = Topic.select(guild=str(ctx.guild.id), group=group, key=key).first()
         if topic is None:
-            await ctx.send(content=f"Sorry we don't have anything about {group}/{key}", hidden=not public)
+            await ctx.send(content=f"Sorry we don't have anything about {group}/{key}", hidden=hidden)
             return
 
         content = topic.content
@@ -155,7 +155,7 @@ class Slash(commands.Cog):
                     hidden=True,
                 )
         else:
-            await ctx.send(content=content, hidden=not public)
+            await ctx.send(content=content, hidden=hidden)
 
         self.analytics.view(
             ctx.guild_id,
@@ -503,8 +503,8 @@ class Slash(commands.Cog):
                 required=False,
             ),
             manage_commands.create_option(
-                name="public",
-                description="Make the response be visible for everyone else in the channel",
+                name="hidden",
+                description="Make the response be visible only by you",
                 option_type=SlashCommandOptionType.BOOLEAN,
                 required=False,
             ),
