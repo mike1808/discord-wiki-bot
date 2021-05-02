@@ -5,7 +5,7 @@ from discord.ext import commands
 from discord_slash import SlashCommand, SlashContext, cog_ext
 from discord_slash.error import RequestFailure
 from discord_slash.utils import manage_commands
-from pony.orm import db_session, select
+from pony.orm import db_session, select, ObjectNotFound
 
 from bot import db
 from bot.config import config
@@ -38,7 +38,16 @@ class HelpBot(commands.Bot):
     @db_session
     async def on_guild_join(self, guild: discord.Guild):
         logger.info(f"We have been added to a new guild! Hi: f{guild.id}: f{guild.name}")
-        db.upsert_guild(str(guild.id), guild.name)
+        try:
+            guild = db.Guild[str(guild.id)]
+            guild.disabled = False
+        except ObjectNotFound:
+            db.upsert_guild(str(guild.id), guild.name)
+
+    @db_session
+    async def on_guild_remove(self, guild: discord.Guild):
+        logger.info(f"We have been removed from the guild guild! Bye: f{guild.id}: f{guild.name}")
+        db.mark_guild_disabled(str(guild.id))
 
 
 setup()

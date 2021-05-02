@@ -20,6 +20,7 @@ class Guild(db.Entity):
     name = Optional(str)
     topics = Set("Topic")
     feedbacks = Set("Feedback")
+    disabled = Optional(bool, index=True, default=False)
 
 
 class Topic(db.Entity):
@@ -77,6 +78,26 @@ def upsert_guild(guild_id: str, guild_name: str) -> tuple[Guild, bool]:
 
 def guild_topics(guild_id: str) -> Iterable[Topic]:
     return Topic.select(lambda t: t.guild.id == str(guild_id)).order_by(Topic.group, Topic.key)
+
+
+def mark_guild_disabled(guild_id: str):
+    try:
+        guild = Guild[guild_id]
+        guild.disabled = True
+    except ObjectNotFound:
+        guild = None
+
+    return guild
+
+
+def mark_guild_enabled(guild_id: str):
+    try:
+        guild = Guild[guild_id]
+        guild.disabled = False
+    except ObjectNotFound:
+        guild = None
+
+    return guild
 
 
 def setup():

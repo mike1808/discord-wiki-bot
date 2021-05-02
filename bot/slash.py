@@ -21,7 +21,7 @@ from pony.orm import commit, db_session, select
 from bot import db
 from bot.analytics import Analytics
 from bot.config import config
-from bot.db import Guild, Topic, guild_topics
+from bot.db import Guild, Topic, guild_topics, mark_guild_disabled
 from bot.feedback import Feedback
 from bot.util import check_has_permissions, Context, parse_wiki_topic_args
 
@@ -42,8 +42,6 @@ class Slash(commands.Cog):
         self.slash = bot.slash
 
         self.bot.loop.create_task(self._setup_wiki_commands())
-
-        self.slash.get_cog_commands(self)
 
         self.analytics = Analytics()
         self.logger = logging.getLogger("wikibot.slash")
@@ -108,7 +106,7 @@ class Slash(commands.Cog):
     @db_session
     async def _setup_wiki_commands(self):
         tasks: list[typing.Coroutine] = []
-        for guild in Guild.select():
+        for guild in Guild.select(disabled=False):
             tasks.append(self.__sync_wiki_command(int(guild.id)))
         try:
             await self.slash.sync_all_commands()
@@ -537,6 +535,7 @@ class Slash(commands.Cog):
             await self.slash.req.add_slash_command(guild_id=guild_id, **command)
         except discord.Forbidden as e:
             self.logger.warn("Not syncing commands for guild: %s, Reason: %s", guild_id, e)
+            mark_guild_disabled(str(guild_id))
 
     def __delete_wiki_command(self, guild_id: int, group: str, key: str):
         command = None
