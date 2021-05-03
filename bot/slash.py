@@ -466,7 +466,7 @@ class Slash(commands.Cog):
     async def _help(self, ctx: SlashContext):
         author = ctx.author
 
-        embed = PaginatedEmbed(title="Help", color=discord.Color.from_rgb(225, 225, 225))
+        embed = PaginatedEmbed(title=f"Help for {ctx.guild.name}", color=discord.Color.from_rgb(225, 225, 225))
         embed.set_footer(text=self.bot.user, icon_url=self.bot.user.avatar_url)
         embed.add_field(
             name=":information_source: General",
