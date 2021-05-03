@@ -24,6 +24,7 @@ from bot.config import config
 from bot.db import Guild, Topic, guild_topics, mark_guild_disabled
 from bot.feedback import Feedback
 from bot.util import check_has_permissions, Context, parse_wiki_topic_args
+from bot.embed_paginator import PaginatedEmbed
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
 
@@ -457,7 +458,7 @@ class Slash(commands.Cog):
     async def _help(self, ctx: SlashContext):
         author = ctx.author
 
-        embed = discord.Embed(title="Help", color=discord.Color.from_rgb(225, 225, 225))
+        embed = PaginatedEmbed(title="Help", color=discord.Color.from_rgb(225, 225, 225))
         embed.set_footer(text=self.bot.user, icon_url=self.bot.user.avatar_url)
         embed.add_field(
             name=":information_source: General",
@@ -488,7 +489,8 @@ class Slash(commands.Cog):
             inline=False,
         )
 
-        await author.send(embed=embed)
+        for e in embed.pages():
+            await author.send(embed=e)
         await ctx.send("Check your DMs for help!", hidden=True)
 
     @db_session
