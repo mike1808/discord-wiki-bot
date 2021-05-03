@@ -30,6 +30,7 @@ class Topic(db.Entity):
     key = Required(str)
     desc = Optional(str)
     content = Required(str)
+    alias = Optional(str)
 
     composite_key(guild, group, key)
 
@@ -41,7 +42,9 @@ class Feedback(db.Entity):
     message = Required(str)
 
 
-def upsert_topic(guild_id: str, group: str, key: str, desc: str, content: str) -> tuple[Topic, bool]:
+def upsert_topic(
+    guild_id: str, group: str, key: str, desc: str, content: str, alias: typing.Union[str, None]
+) -> tuple[Topic, bool]:
     group = str.lower(group)
     key = str.lower(key)
 
@@ -54,11 +57,13 @@ def upsert_topic(guild_id: str, group: str, key: str, desc: str, content: str) -
             key=key,
             desc=desc,
             content=content,
+            alias=alias,
         )
         new = True
     else:
         topic.desc = desc
         topic.content = content
+        topic.alias = alias
         new = False
 
     return (topic, new)

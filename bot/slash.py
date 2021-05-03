@@ -191,12 +191,18 @@ class Slash(commands.Cog):
                 option_type=SlashCommandOptionType.STRING,
                 required=True,
             ),
+            manage_commands.create_option(
+                name="alias",
+                description="Alias to be used with old-shool !help commands",
+                option_type=SlashCommandOptionType.STRING,
+                required=False,
+            ),
         ],
     )
     @check_has_permissions(manage_channels=True)
     @db_session
-    async def _topic_upsert(self, ctx: SlashContext, group: str, key: str, description: str, content: str):
-        topic, new = db.upsert_topic(str(ctx.guild.id), group, key, description, content)
+    async def _topic_upsert(self, ctx: SlashContext, group: str, key: str, description: str, content: str, alias: str):
+        topic, new = db.upsert_topic(str(ctx.guild.id), group, key, description, content, alias)
 
         author_id = ctx.author_id
         self.logger.info(
@@ -308,7 +314,7 @@ class Slash(commands.Cog):
     async def _bulk_help(self, ctx: SlashContext):
         await ctx.send(
             content='Bulk import and export commands consume and produce CSV files. CSV files should be delimited with a single quota `,` and use double quotes `"`.'
-            + "\nIt should contain 4 columns and the header is optional. Those columns are `group,key,description,content`."
+            + "\nIt should contain 4 columns and the header is optional. Those columns are `group,key,description,content,alias`."
             + "\nTo import your topics you should create a CSV file and upload it to Discord in the same channel where you are going to use the import command."
             + f"\nThen you have to use the `/{WIKI_COMMAND} bulk import` command to import the topics."
             + "\nWikiBot will search the latest 5 messages in the channel and select the latest your message and try to download your CSV file."
@@ -336,7 +342,7 @@ class Slash(commands.Cog):
 
         csvoutput = io.StringIO()
         csvwriter = csv.writer(csvoutput, quoting=csv.QUOTE_MINIMAL)
-        csvwriter.writerow(["group", "key", "desc", "content"])
+        csvwriter.writerow(["group", "key", "desc", "content", "alias"])
         count = 0
 
         for t in guild_topics(str(ctx.guild.id)):
@@ -407,7 +413,9 @@ class Slash(commands.Cog):
 
         csvreader = csv.reader(io.StringIO(csvcontent.read().decode("utf-8")), quoting=csv.QUOTE_MINIMAL)
         for row in csvreader:
-            topic, new = db.upsert_topic(str(ctx.guild.id), row[0], row[1], row[2], row[3])
+            topic, new = db.upsert_topic(
+                str(ctx.guild.id), row[0], row[1], row[2], row[3], row[4] if len(row) == 5 else ""
+            )
             if new:
                 added += 1
             else:
@@ -495,6 +503,7 @@ class Slash(commands.Cog):
 
     @db_session
     async def __sync_wiki_command(self, guild_id: int):
+        aliases = []
         subcommand_options = [
             manage_commands.create_option(
                 name="reply_to",
@@ -524,6 +533,9 @@ class Slash(commands.Cog):
                     "options": subcommand_options,
                 }
             )
+            if topic.alias:
+                aliases.append(topic)
+
         for (group, topics) in groups.items():
             subgroup = {
                 "name": group,
@@ -533,11 +545,36 @@ class Slash(commands.Cog):
             }
             command["options"].append(subgroup)
 
+        cmd_check = self._create_command_check(guild_id)
+        for topic in aliases:
+            cmd = commands.Command(
+                self._create_wiki_bot_command_callback(topic),
+                name=topic.alias,
+                description=topic.desc,
+                help=topic.desc,
+                checks=[cmd_check],
+                cog=self,
+            )
+            self.bot.add_command(cmd)
+
         try:
             await self.slash.req.add_slash_command(guild_id=guild_id, **command)
         except discord.Forbidden as e:
             self.logger.warn("Not syncing commands for guild: %s, Reason: %s", guild_id, e)
             mark_guild_disabled(str(guild_id))
+
+    def _create_wiki_bot_command_callback(self, topic: Topic):
+        async def callback(ctx: commands.Context):
+            if str(ctx.guild.id) == topic.guild.id:
+                await ctx.send(topic.content)
+
+        return callback
+
+    def _create_command_check(self, guild_id: int):
+        async def is_for_guild(ctx: commands.Context):
+            return ctx.guild.id == guild_id
+
+        return is_for_guild
 
     def __delete_wiki_command(self, guild_id: int, group: str, key: str):
         command = None
