@@ -35,11 +35,11 @@ class Context:
     def __init__(self, context: typing.Union[commands.Context, SlashContext]):
         self.context = context
 
-    async def send(self, *args, **kwargs):
+    async def send(self, content, **kwargs):
         if isinstance(self.context, SlashContext):
-            return await self.context.send(*args, **kwargs)
+            return await self.context.send(content, **kwargs)
         else:
-            return await self.context.send(kwargs["content"])
+            return await self.context.send(content)
 
     def __getattr__(self, name):
         return getattr(self.context, name)

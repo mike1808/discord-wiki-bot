@@ -157,7 +157,7 @@ class Slash(commands.Cog):
             await ctx.send(content=content, hidden=hidden)
 
         self.analytics.view(
-            ctx.guild_id,
+            ctx.guild.id,
             f"{group}/{key}",
         )
 
