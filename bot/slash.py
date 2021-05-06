@@ -201,7 +201,9 @@ class Slash(commands.Cog):
     )
     @check_has_permissions(manage_channels=True)
     @db_session
-    async def _topic_upsert(self, ctx: SlashContext, group: str, key: str, description: str, content: str, alias: str):
+    async def _topic_upsert(
+        self, ctx: SlashContext, group: str, key: str, description: str, content: str, alias: str = ""
+    ):
         topic, new = db.upsert_topic(str(ctx.guild.id), group, key, description, content, alias)
 
         author_id = ctx.author_id
