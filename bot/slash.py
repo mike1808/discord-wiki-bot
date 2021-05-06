@@ -557,6 +557,7 @@ class Slash(commands.Cog):
                 checks=[cmd_check],
                 cog=self,
             )
+            self.bot.remove_command(topic.alias)
             self.bot.add_command(cmd)
 
         try:
