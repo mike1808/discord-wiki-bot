@@ -10,11 +10,21 @@ import asyncio
 
 
 import discord
+from discord import guild
 import discord.ext.commands
 import discord_slash.error
 from discord.ext import commands
-from discord_slash import SlashCommand, SlashCommandOptionType, SlashContext, cog_ext
+from discord_slash import SlashCommandOptionType, SlashContext, cog_ext, ComponentContext
 from discord_slash.utils import manage_commands
+from discord_slash.utils.manage_components import (
+    create_button,
+    create_actionrow,
+    wait_for_component,
+    create_select,
+    create_select_option,
+)
+from discord_slash.utils.manage_commands import create_permission,  update_single_command_permissions
+from discord_slash.model import SlashCommandPermissionType
 import discord_slash.model
 from pony.orm import commit, db_session, select
 
@@ -23,7 +33,7 @@ from bot.analytics import Analytics
 from bot.config import config
 from bot.db import Guild, Topic, guild_topics, mark_guild_disabled
 from bot.feedback import Feedback
-from bot.util import check_has_permissions, Context, parse_wiki_topic_args
+from bot.util import Context, parse_wiki_topic_args, check_can_configure, my_check
 from bot.embed_paginator import PaginatedEmbed
 
 MAX_SUBCOMMANDS_ERROR_CODE = 50035
@@ -32,12 +42,30 @@ WIKI_COMMAND = config.command_prefix + "wiki"
 WIKI_FEEDBACK_COMMAND = WIKI_COMMAND + "-feedback"
 WIKI_HELP_COMMAND = WIKI_COMMAND + "-help"
 WIKI_MANAGEMENT_COMMAND = WIKI_COMMAND + "-mgmt"
+WIKI_CONFIG_COMMAND = WIKI_COMMAND + "-config"
+WIKI_BULK_COMMAND = WIKI_COMMAND + "-bulk"
+
+WIKI_ADMIN_COMMANDS = [WIKI_MANAGEMENT_COMMAND]
 
 MANAGE_CHANNELS = discord.Permissions()
 MANAGE_CHANNELS.manage_channels = True
 
 
+@db_session
+def _setup_permissions():
+    guilds = db.active_guilds()
+    permissions = {
+        int(guild.id): _create_permissions_for_guild(guild)
+        for guild in guilds if guild.mgmt_roles is not None and len(guild.mgmt_roles[:]) > 0
+    }
+    return permissions
+
+def _create_permissions_for_guild(guild):
+    return [create_permission(int(guild.id), SlashCommandPermissionType.ROLE, False)] + [create_permission(int(role), SlashCommandPermissionType.ROLE, True) for role in guild.mgmt_roles]
+
 class Slash(commands.Cog):
+    mgmt_permissions = _setup_permissions()
+
     def __init__(self, bot: discord.ext.commands.Bot):
         self.bot = bot
         self.slash = bot.slash
@@ -58,7 +86,7 @@ class Slash(commands.Cog):
             return
 
         d = msg["d"]
-        if d["data"]["name"] != WIKI_COMMAND:
+        if d["data"] is not None and d["data"].get("name", "") != WIKI_COMMAND:
             return
         ctx = Context(SlashContext(self.slash.req, d, self.bot, self.logger))
 
@@ -163,6 +191,7 @@ class Slash(commands.Cog):
 
     @cog_ext.cog_subcommand(
         base=WIKI_MANAGEMENT_COMMAND,
+        base_permissions=mgmt_permissions,
         name="upsert",
         description="Add or modify a topic",
         guild_ids=config.dev_guild_ids,
@@ -199,7 +228,7 @@ class Slash(commands.Cog):
             ),
         ],
     )
-    @check_has_permissions(manage_channels=True)
+    @check_can_configure()
     @db_session
     async def _topic_upsert(
         self, ctx: SlashContext, group: str, key: str, description: str, content: str, alias: str = ""
@@ -261,7 +290,7 @@ class Slash(commands.Cog):
             ),
         ],
     )
-    @check_has_permissions(manage_channels=True)
+    @check_can_configure()
     @db_session
     async def _topic_delete(self, ctx: SlashContext, group: str, key: str):
         topic = Topic.select(
@@ -293,7 +322,7 @@ class Slash(commands.Cog):
         description="Get commands usage analytics",
         guild_ids=config.dev_guild_ids,
     )
-    @check_has_permissions(manage_channels=True)
+    @check_can_configure()
     @db_session
     async def _analytics(self, ctx: SlashContext):
         views = self.analytics.retreive(ctx.guild.id)
@@ -305,33 +334,68 @@ class Slash(commands.Cog):
 
         await ctx.send(embed=embed)
 
+    @cog_ext.cog_slash(
+        name=WIKI_CONFIG_COMMAND,
+        guild_ids=config.dev_guild_ids,
+        description="Configure WikiBot",
+        permissions=mgmt_permissions,
+    )
+    @my_check(commands.has_permissions(manage_roles=True).predicate)
+    @db_session
+    async def _wiki_config(self, ctx: SlashContext):
+        roles = await ctx.guild.fetch_roles()
+        role_select = create_select(
+            options=[create_select_option(role.name, value=str(role.id)) for role in roles],
+            placeholder="Choose the role or roles",
+            min_values=1,
+            max_values=len(roles),
+        )
+
+        action_row = create_actionrow(role_select)
+        await ctx.send(
+            "Please select the role or roles which will be able to run WikiBot management commands.",
+            components=[action_row],
+        )
+        component_ctx: ComponentContext = await wait_for_component(self.bot, components=action_row)
+        await component_ctx.edit_origin(components=[])
+
+        guild = Guild[str(ctx.guild_id)]
+        guild.mgmt_roles = component_ctx.selected_options or []
+        commit()
+
+        if component_ctx.selected_options:
+            names = ", ".join([role.name for role in roles if str(role.id) in component_ctx.selected_options])
+            await component_ctx.send(content=f"Nice! Now only {names} can control me!")
+        else:
+            await component_ctx.send(content=f"Looks like you didn't select anything. Ok...")
+
+        self._update_permissions(guild)
+
     @cog_ext.cog_subcommand(
-        base=WIKI_MANAGEMENT_COMMAND,
-        subcommand_group="bulk",
+        base=WIKI_BULK_COMMAND,
+        base_permissions=mgmt_permissions,
         name="help",
-        description=f"Show help with `/{WIKI_MANAGEMENT_COMMAND} import` commands",
+        description=f"Show help with `/{WIKI_BULK_COMMAND}` commands",
         guild_ids=config.dev_guild_ids,
     )
-    @check_has_permissions(manage_channels=True)
+    @check_can_configure()
     async def _bulk_help(self, ctx: SlashContext):
         await ctx.send(
             content='Bulk import and export commands consume and produce CSV files. CSV files should be delimited with a single quota `,` and use double quotes `"`.'
             + "\nIt should contain 4 columns and the header is optional. Those columns are `group,key,description,content,alias`."
-            + "\nTo import your topics you should create a CSV file and upload it to Discord in the same channel where you are going to use the import command."
-            + f"\nThen you have to use the `/{WIKI_COMMAND} bulk import` command to import the topics."
+            + "\nTo iupdate_single_command_permissionsn you have to use the `/{WIKI_COMMAND} bulk import` command to import the topics."
             + "\nWikiBot will search the latest 5 messages in the channel and select the latest your message and try to download your CSV file."
             + "\nThen it will import all provided topics. Be careful! It will override the description and content of all topics currently created.",
             hidden=True,
         )
 
     @cog_ext.cog_subcommand(
-        base=WIKI_MANAGEMENT_COMMAND,
-        subcommand_group="bulk",
+        base=WIKI_BULK_COMMAND,
         name="export",
         description=f"Export all existing topics to CSV file",
         guild_ids=config.dev_guild_ids,
     )
-    @check_has_permissions(manage_channels=True)
+    @check_can_configure()
     @db_session
     async def _bulk_export(self, ctx: SlashContext):
         await ctx.defer()
@@ -360,13 +424,12 @@ class Slash(commands.Cog):
         )
 
     @cog_ext.cog_subcommand(
-        base=WIKI_MANAGEMENT_COMMAND,
-        subcommand_group="bulk",
+        base=WIKI_BULK_COMMAND,
         name="import",
         description=f"Import topics from CSV file",
         guild_ids=config.dev_guild_ids,
     )
-    @check_has_permissions(manage_channels=True)
+    @check_can_configure()
     @db_session
     async def _bulk_import(self, ctx: SlashContext):
         await ctx.defer()
@@ -431,6 +494,9 @@ class Slash(commands.Cog):
             content=f"Import was successfuly finished! **{added}** added and **{updated}** updated.",
         )
 
+    async def on_error(self, ctx, error):
+        await ctx.send("error")
+
     @cog_ext.cog_slash(
         name=WIKI_FEEDBACK_COMMAND,
         description=f"Leave feedback to the bot developer",
@@ -479,12 +545,13 @@ class Slash(commands.Cog):
         )
         if isinstance(author, discord.Member) and author.guild_permissions >= MANAGE_CHANNELS:
             help = ""
-            for (name, x) in self.slash.subcommands[WIKI_MANAGEMENT_COMMAND].items():
-                if isinstance(x, discord_slash.model.CogSubcommandObject):
-                    help += f"`/{WIKI_MANAGEMENT_COMMAND} {name}`: {x.description}\n"
-                else:
-                    for (subname, x) in self.slash.subcommands[WIKI_MANAGEMENT_COMMAND][name].items():
-                        help += f"`/{WIKI_MANAGEMENT_COMMAND} {name} {subname}`: {x.description}\n"
+            for base in [WIKI_BULK_COMMAND, WIKI_MANAGEMENT_COMMAND]:
+                for (name, x) in self.slash.subcommands[base].items():
+                    if isinstance(x, discord_slash.model.CogSubcommandObject):
+                        help += f"`/{base} {name}`: {x.description}\n"
+                    else:
+                        for (subname, x) in self.slash.subcommands[base][name].items():
+                            help += f"`/{base} {name} {subname}`: {x.description}\n"
 
             embed.add_field(
                 name=":wrench: Settings",
@@ -592,6 +659,16 @@ class Slash(commands.Cog):
             command.allowed_guild_ids = [g for g in command.allowed_guild_ids if g != guild_id]
             if len(command.allowed_guild_ids) == 0:
                 del self.slash.subcommands[WIKI_COMMAND][group][key]
+    
+    def _update_permissions(self, guild):
+        if len(guild.mgmt_roles) > 0:
+            self.mgmt_permissions[int(guild.id)] = _create_permissions_for_guild(guild)
+        else:
+            self.mgmt_permissions.pop(int(guild.id), None)
+
+        # very hacky solution, it reloads the whole cog just to trigger sync
+        self.bot.reload_slash()
+            
 
 
 def parse_command_args(args: list[str]) -> dict[str, object]:

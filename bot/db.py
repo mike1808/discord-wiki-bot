@@ -22,6 +22,7 @@ class Guild(db.Entity):
     topics = Set("Topic")
     feedbacks = Set("Feedback")
     disabled = Optional(bool, index=True, default=False)
+    mgmt_roles = Optional(StrArray)
 
 
 class Topic(db.Entity):
@@ -104,6 +105,9 @@ def mark_guild_enabled(guild_id: str):
         guild = None
 
     return guild
+
+def active_guilds() -> Iterable[Guild]:
+    return Guild.select(lambda g: g.disabled == False)
 
 
 def setup():

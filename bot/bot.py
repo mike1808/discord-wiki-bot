@@ -2,14 +2,11 @@ import logging
 
 import discord
 from discord.ext import commands
-from discord_slash import SlashCommand, SlashContext, cog_ext
-from discord_slash.error import RequestFailure
-from discord_slash.utils import manage_commands
-from pony.orm import db_session, select, ObjectNotFound
+from discord_slash import SlashCommand
+from pony.orm import db_session, ObjectNotFound
 
 from bot import db
 from bot.config import config
-from bot.db import Guild, Topic
 
 logger = logging.getLogger("wikibot.bot")
 
@@ -18,7 +15,7 @@ logging.getLogger("wikibot").setLevel(logging.DEBUG)
 
 def setup():
     logging.basicConfig(level=logging.INFO)
-    # logging.getLogger("discord_slash").setLevel(logging.DEBUG)
+    logging.getLogger("discord_slash").setLevel(logging.DEBUG)
 
     logger.info("Runing DB setup")
     db.setup()
@@ -48,6 +45,9 @@ class HelpBot(commands.Bot):
     async def on_guild_remove(self, guild: discord.Guild):
         logger.info(f"We have been removed from the guild guild! Bye: f{guild.id}: f{guild.name}")
         db.mark_guild_disabled(str(guild.id))
+
+    def reload_slash(self):
+        self.reload_extension("bot.slash")
 
 
 setup()
